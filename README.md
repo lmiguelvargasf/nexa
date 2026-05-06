@@ -43,12 +43,12 @@ Nexa is a Next.js App Router application scaffolded for a modern full-stack prod
 
 ## Requirements
 
-- [mise](https://mise.jdx.dev/installing-mise.html) for project tools and tasks.
+- [mise](https://mise.jdx.dev/installing-mise.html) for project tools.
 - [Docker](https://docs.docker.com/get-started/get-docker/) for local Supabase.
 
 mise installs and activates the pinned Node.js, Bun, and GitHub CLI versions from `mise.toml`.
 
-For interactive shells, activate mise once using the shell integration from the mise docs. You can also run project commands explicitly with `mise run`.
+For interactive shells, activate mise once using the shell integration from the mise docs. After activation, `node`, `bun`, and `gh` resolve to the project-pinned versions in this directory.
 
 ## Initialize Locally
 
@@ -61,15 +61,15 @@ mise install
 2. Initialize the local project:
 
 ```bash
-mise run setup
+bun install
+cp .env.example .env.local
+bunx playwright install
 ```
-
-This installs Bun dependencies, creates `.env.local` from `.env.example` when missing, and installs Playwright browsers.
 
 3. Start the app:
 
 ```bash
-mise run dev
+bun run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
@@ -79,7 +79,7 @@ Open [http://localhost:3000](http://localhost:3000).
 Docker must be running before starting Supabase.
 
 ```bash
-mise run db:start
+bun run db:start
 ```
 
 After Supabase starts, copy the local API URL, anon key, and database URL from the CLI output into `.env.local`.
@@ -94,10 +94,10 @@ DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 Useful database commands:
 
 ```bash
-mise run db:reset
-mise run db:types
-mise run db:introspect
-mise run db:stop
+bun run db:reset
+bun run db:types
+bun run db:introspect
+bun run db:stop
 ```
 
 Use Supabase migrations as the source of truth for schema changes. Drizzle is configured for type-safe queries and introspection, not for owning migrations.
@@ -107,7 +107,7 @@ Use Supabase migrations as the source of truth for schema changes. Drizzle is co
 React Email templates live in `emails/`.
 
 ```bash
-mise run email:dev
+bun run email:dev --port 3001
 ```
 
 Open [http://localhost:3001](http://localhost:3001).
@@ -116,34 +116,36 @@ Open [http://localhost:3001](http://localhost:3001).
 
 | Command | Description |
 | --- | --- |
-| `mise run setup` | Install dependencies, initialize `.env.local`, and install Playwright browsers. |
-| `mise run dev` | Start the Next.js development server. |
-| `mise run build` | Create a production build. |
-| `mise run start` | Start the production server after `build`. |
-| `mise run check` | Run Biome formatting, linting, and import checks. |
-| `mise run check:write` | Apply safe Biome fixes. |
-| `mise run format` | Format the repository with Biome. |
-| `mise run lint` | Run Biome lint rules only. |
-| `mise run typecheck` | Generate Next route types and run TypeScript with `noEmit`. |
-| `mise run test` | Run Vitest once. |
-| `mise run test:watch` | Start Vitest in watch mode. |
-| `mise run e2e` | Run Playwright tests across Chromium, Firefox, and WebKit. |
-| `mise run e2e:ui` | Open the Playwright UI runner. |
-| `mise run db:start` | Start the local Supabase stack. |
-| `mise run db:stop` | Stop the local Supabase stack. |
-| `mise run db:reset` | Reset the local Supabase database. |
-| `mise run db:pull` | Pull remote schema changes into Supabase migrations. |
-| `mise run db:types` | Generate local Supabase TypeScript database types. |
-| `mise run db:introspect` | Introspect the database with Drizzle Kit. |
-| `mise run email:dev` | Start the React Email preview server on port 3001. |
-| `mise run doctor` | Check the local toolchain expected by the project. |
+| `bun run dev` | Start the Next.js development server. |
+| `bun run build` | Create a production build. |
+| `bun run start` | Start the production server after `build`. |
+| `bun run check` | Run Biome formatting, linting, and import checks. |
+| `bun run check:write` | Apply safe Biome fixes. |
+| `bun run format` | Format the repository with Biome. |
+| `bun run lint` | Run Biome lint rules only. |
+| `bun run typecheck` | Generate Next route types and run TypeScript with `noEmit`. |
+| `bun run test` | Start Vitest in watch mode. |
+| `bun run test:run` | Run Vitest once. |
+| `bun run e2e` | Run Playwright tests across Chromium, Firefox, and WebKit. |
+| `bun run e2e:ui` | Open the Playwright UI runner. |
+| `bun run db:start` | Start the local Supabase stack. |
+| `bun run db:stop` | Stop the local Supabase stack. |
+| `bun run db:reset` | Reset the local Supabase database. |
+| `bun run db:pull` | Pull remote schema changes into Supabase migrations. |
+| `bun run db:types` | Generate local Supabase TypeScript database types. |
+| `bun run db:introspect` | Introspect the database with Drizzle Kit. |
+| `bun run email:dev` | Start the React Email preview server. |
 
 ## Validation Before Opening a PR
 
 Run the same checks that the current scaffold was validated with:
 
 ```bash
-mise run validate
+bun run check
+bun run typecheck
+bun run test:run
+bun run build
+bun run e2e
 ```
 
 ## Project Structure
@@ -176,7 +178,7 @@ Prefer read-only or project-scoped MCP settings for shared or sensitive Supabase
 
 - Read [AGENTS.md](./AGENTS.md) before changing code.
 - This project uses Next.js 16. The local Next docs in `node_modules/next/dist/docs/` are the preferred reference when working on framework behavior.
-- Prefer existing mise tasks over ad hoc commands. If a new workflow becomes common, add a task and document it here.
+- Prefer existing package scripts over ad hoc commands. If a new workflow becomes common, add a script and document it here.
 - Keep Supabase migrations authoritative for schema changes. Use Drizzle for typed queries and introspection.
 - Do not commit secrets. `.env.local` is ignored; `.env.example` is the committed contract.
-- Run `mise run validate` before pushing.
+- Run `bun run check`, `bun run typecheck`, and the relevant tests before pushing.
