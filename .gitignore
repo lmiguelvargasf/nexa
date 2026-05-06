@@ -42,14 +42,8 @@ yarn-error.log*
 # mise
 mise.local.toml
 mise.*.local.toml
-mise.local.lock
-mise.*.local.lock
 .mise.local.toml
 .mise.*.local.toml
-.mise.local.lock
-.mise.*.local.lock
-.mise/config.local.toml
-.mise/config.*.local.toml
 
 # typescript
 *.tsbuildinfo
