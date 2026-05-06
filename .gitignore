@@ -39,6 +39,12 @@ yarn-error.log*
 # vercel
 .vercel
 
+# mise
+mise.local.toml
+mise.*.local.toml
+.mise.local.toml
+.mise.*.local.toml
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

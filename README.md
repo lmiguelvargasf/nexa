@@ -19,7 +19,7 @@ Nexa is a Next.js App Router application scaffolded for a modern full-stack prod
 | UI runtime | [React 19](https://react.dev) | Component model for Server and Client Components. |
 | Language | [TypeScript](https://www.typescriptlang.org) | Strict static typing across app, config, and tests. |
 | Package manager | [Bun](https://bun.sh/docs) | Dependency installation and script runner. |
-| Runtime | [Node.js](https://nodejs.org/en) | Next.js server runtime, pinned to the current LTS line in `.nvmrc` and `.node-version`. |
+| Runtime | [Node.js](https://nodejs.org/en) | Next.js server runtime, pinned by `mise.toml` and `mise.lock`. |
 | Styling | [Tailwind CSS v4](https://tailwindcss.com/docs) | Utility-first CSS with the native CSS engine. |
 | Components | [shadcn/ui](https://ui.shadcn.com) + [Radix UI](https://www.radix-ui.com/primitives) | Copy-owned accessible UI primitives. |
 | Icons | [lucide-react](https://lucide.dev/guide/packages/lucide-react) | Tree-shakeable icon set. |
@@ -43,29 +43,27 @@ Nexa is a Next.js App Router application scaffolded for a modern full-stack prod
 
 ## Requirements
 
-- [Node.js](https://nodejs.org/en) `v24.15.0` or newer within the `24.x` LTS line.
-- [Bun](https://bun.sh/docs/installation) `1.3.13` or newer.
+- [mise](https://mise.jdx.dev/installing-mise.html) for project tools.
 - [Docker](https://docs.docker.com/get-started/get-docker/) for local Supabase.
-- [GitHub CLI](https://cli.github.com) only when publishing branches or pull requests from the terminal.
 
-Use the pinned Node version when your shell supports it:
+mise installs and activates the pinned Node.js, Bun, and GitHub CLI versions from `mise.toml`.
 
-```bash
-nvm use
-```
+For interactive shells, activate mise once using the shell integration from the mise docs. After activation, `node`, `bun`, and `gh` resolve to the project-pinned versions in this directory.
 
 ## Initialize Locally
 
-1. Install dependencies:
+1. Install pinned project tools:
+
+```bash
+mise install
+```
+
+2. Initialize the local project:
 
 ```bash
 bun install
-```
-
-2. Create a local environment file:
-
-```bash
 cp .env.example .env.local
+bunx playwright install
 ```
 
 3. Start the app:
@@ -180,7 +178,7 @@ Prefer read-only or project-scoped MCP settings for shared or sensitive Supabase
 
 - Read [AGENTS.md](./AGENTS.md) before changing code.
 - This project uses Next.js 16. The local Next docs in `node_modules/next/dist/docs/` are the preferred reference when working on framework behavior.
-- Prefer existing scripts over ad hoc commands. If a new workflow becomes common, add a script and document it here.
+- Prefer existing package scripts over ad hoc commands. If a new workflow becomes common, add a script and document it here.
 - Keep Supabase migrations authoritative for schema changes. Use Drizzle for typed queries and introspection.
 - Do not commit secrets. `.env.local` is ignored; `.env.example` is the committed contract.
 - Run `bun run check`, `bun run typecheck`, and the relevant tests before pushing.
