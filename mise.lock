@@ -83,3 +83,23 @@ url = "https://nodejs.org/dist/v24.15.0/node-v24.15.0-darwin-arm64.tar.gz"
 [tools.node."platforms.macos-x64"]
 checksum = "sha256:ffd5ee293467927f3ee731a553eb88fd1f48cf74eebc2d74a6babe4af228673b"
 url = "https://nodejs.org/dist/v24.15.0/node-v24.15.0-darwin-x64.tar.gz"
+
+[[tools.task]]
+version = "3.50.0"
+backend = "aqua:go-task/task"
+
+[tools.task."platforms.linux-arm64"]
+checksum = "sha256:ee67e7d999a4a70711bff1946c70bf76628012c91d9be55626ee90ba976897da"
+url = "https://github.com/go-task/task/releases/download/v3.50.0/task_linux_arm64.tar.gz"
+
+[tools.task."platforms.linux-x64"]
+checksum = "sha256:d449ba85ab85a0769989d78f8b9872938e4ba9347f7f4f925f73d98272a0a655"
+url = "https://github.com/go-task/task/releases/download/v3.50.0/task_linux_amd64.tar.gz"
+
+[tools.task."platforms.macos-arm64"]
+checksum = "sha256:838b7954f227b5e8f798ad83111195aed810cf4f98dfabef4aa77ea065dd74b0"
+url = "https://github.com/go-task/task/releases/download/v3.50.0/task_darwin_arm64.tar.gz"
+
+[tools.task."platforms.macos-x64"]
+checksum = "sha256:da3ba003ec049fb8be1ff798132c951dcd08a60efbdc2d1e918bf2095cd4a39c"
+url = "https://github.com/go-task/task/releases/download/v3.50.0/task_darwin_amd64.tar.gz"
