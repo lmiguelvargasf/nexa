@@ -1,0 +1,89 @@
+name: Database
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/database.yml"
+      - "Taskfile.yml"
+      - "bun.lock"
+      - "mise.lock"
+      - "mise.toml"
+      - "package.json"
+      - "src/db/**"
+      - "supabase/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/database.yml"
+      - "Taskfile.yml"
+      - "bun.lock"
+      - "mise.lock"
+      - "mise.toml"
+      - "package.json"
+      - "src/db/**"
+      - "supabase/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  verify:
+    name: Supabase validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up pinned tools
+        uses: jdx/mise-action@v4
+        with:
+          install_args: node bun task
+          cache: true
+
+      - name: Cache Bun package cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Start Supabase
+        run: task db:start
+
+      - name: Reset database
+        run: |
+          if [ -f supabase/seed.sql ]; then
+            task db:reset
+          else
+            bunx supabase db reset --local --no-seed
+          fi
+
+      - name: Lint database
+        run: bunx supabase db lint --local --fail-on warning
+
+      - name: Run pgTAP tests
+        run: |
+          if find supabase/tests -type f -name "*.sql" 2>/dev/null | grep -q .; then
+            bunx supabase test db --local supabase/tests
+          else
+            echo "No Supabase pgTAP tests found; skipping."
+          fi
+
+      - name: Stop Supabase
+        if: always()
+        run: bunx supabase stop --no-backup || true
