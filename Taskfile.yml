@@ -1,6 +1,9 @@
 # yaml-language-server: $schema=https://taskfile.dev/schema.json
 version: "3.17"
 
+vars:
+  BUN_RUN: bun run
+
 dotenv:
   - .env.local
 
@@ -14,7 +17,7 @@ tasks:
   setup:
     desc: Install pinned tools, dependencies, env file, and Playwright browsers
     cmds:
-      - mise install
+      - mise install --yes --locked
       - task: env:init
       - task: install
       - task: playwright:install
@@ -36,7 +39,7 @@ tasks:
     desc: Start the Next.js development server
     aliases: [app]
     cmds:
-      - bun run dev {{.CLI_ARGS}}
+      - "{{.BUN_RUN}} dev {{.CLI_ARGS}}"
 
   up:
     desc: Start local Supabase, then the Next.js development server
@@ -47,61 +50,61 @@ tasks:
   build:
     desc: Create a production Next.js build
     cmds:
-      - bun run build {{.CLI_ARGS}}
+      - "{{.BUN_RUN}} build {{.CLI_ARGS}}"
 
   start:
     desc: Start the production server after a build
     cmds:
-      - bun run start {{.CLI_ARGS}}
+      - "{{.BUN_RUN}} start {{.CLI_ARGS}}"
 
   typecheck:
     desc: Generate Next route types and run TypeScript checks
     aliases: [types]
     cmds:
-      - bun run typecheck
+      - "{{.BUN_RUN}} typecheck"
 
   lint:
     desc: Run Biome lint rules
     cmds:
-      - bun run lint {{.CLI_ARGS}}
+      - "{{.BUN_RUN}} lint {{.CLI_ARGS}}"
 
   format:
     desc: Format the repository with Biome
     aliases: [fmt]
     cmds:
-      - bun run format {{.CLI_ARGS}}
+      - "{{.BUN_RUN}} format {{.CLI_ARGS}}"
 
   check:
     desc: Run Biome formatting, linting, and import checks
     cmds:
-      - bun run check {{.CLI_ARGS}}
+      - "{{.BUN_RUN}} check {{.CLI_ARGS}}"
 
   check:write:
     desc: Apply safe Biome fixes
     aliases: [fix]
     cmds:
-      - bun run check:write {{.CLI_ARGS}}
+      - "{{.BUN_RUN}} check:write {{.CLI_ARGS}}"
 
   test:
     desc: Run Vitest in watch mode
     cmds:
-      - bun run test {{.CLI_ARGS}}
+      - "{{.BUN_RUN}} test {{.CLI_ARGS}}"
 
   test:run:
     desc: Run Vitest once
     aliases: [unit]
     cmds:
-      - bun run test:run {{.CLI_ARGS}}
+      - "{{.BUN_RUN}} test:run {{.CLI_ARGS}}"
 
   e2e:
     desc: Run Playwright end-to-end tests
     cmds:
-      - bun run e2e {{.CLI_ARGS}}
+      - "{{.BUN_RUN}} e2e {{.CLI_ARGS}}"
 
   e2e:ui:
     desc: Open the Playwright UI runner
     cmds:
-      - bun run e2e:ui {{.CLI_ARGS}}
+      - "{{.BUN_RUN}} e2e:ui {{.CLI_ARGS}}"
 
   playwright:install:
     desc: Install Playwright browser binaries
@@ -126,27 +129,28 @@ tasks:
   db:start:
     desc: Start the local Supabase stack
     cmds:
-      - bun run db:start {{.CLI_ARGS}}
+      - "{{.BUN_RUN}} db:start {{.CLI_ARGS}}"
+      - ./scripts/sync-supabase-env.sh
 
   db:stop:
     desc: Stop the local Supabase stack
     cmds:
-      - bun run db:stop {{.CLI_ARGS}}
+      - "{{.BUN_RUN}} db:stop {{.CLI_ARGS}}"
 
   db:reset:
     desc: Reset the local Supabase database
     cmds:
-      - bun run db:reset {{.CLI_ARGS}}
+      - "{{.BUN_RUN}} db:reset {{.CLI_ARGS}}"
 
   db:pull:
     desc: Pull remote schema changes into Supabase migrations
     cmds:
-      - bun run db:pull {{.CLI_ARGS}}
+      - "{{.BUN_RUN}} db:pull {{.CLI_ARGS}}"
 
   db:types:
     desc: Generate local Supabase TypeScript database types
     cmds:
-      - bun run db:types
+      - "{{.BUN_RUN}} db:types"
 
   db:introspect:
     desc: Introspect the database with Drizzle Kit
@@ -154,12 +158,12 @@ tasks:
       - sh: test -n "$DATABASE_URL"
         msg: DATABASE_URL is required. Set it in .env.local or your shell.
     cmds:
-      - bun run db:introspect {{.CLI_ARGS}}
+      - "{{.BUN_RUN}} db:introspect {{.CLI_ARGS}}"
 
   email:dev:
     desc: Start the React Email preview server
     cmds:
-      - bun run email:dev {{.CLI_ARGS}}
+      - "{{.BUN_RUN}} email:dev {{.CLI_ARGS}}"
 
   next:info:
     desc: Print Next.js diagnostic information
