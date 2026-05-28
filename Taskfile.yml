@@ -134,6 +134,7 @@ tasks:
     desc: Start the local Supabase stack
     cmds:
       - "{{.BUN_RUN}} db:start {{.CLI_ARGS}}"
+      - ./scripts/sync-supabase-env.sh
 
   db:stop:
     desc: Stop the local Supabase stack

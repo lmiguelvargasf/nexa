@@ -54,13 +54,6 @@ Docker must be running before starting Supabase.
 task db:start
 ```
 
-Copy the local API URL, anon key, and database URL from the Supabase CLI output into `.env.local`. Typical local values use these ports:
-
-```bash
-NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
-DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
-```
-
 Useful database tasks:
 
 ```bash
