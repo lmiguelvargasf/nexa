@@ -115,32 +115,7 @@ Open [http://localhost:3001](http://localhost:3001).
 
 Task is the primary local process runner. Package scripts remain available as Bun-compatible leaf commands, but prefer `task` for day-to-day workflows and shared process orchestration.
 
-| Command | Description |
-| --- | --- |
-| `task` | List available tasks. |
-| `task setup` | Install pinned tools, dependencies, env file, and Playwright browsers. |
-| `task dev` | Start the Next.js development server. |
-| `task up` | Start local Supabase, then the Next.js development server. |
-| `task build` | Create a production build. |
-| `task start` | Start the production server after `build`. |
-| `task check` | Run Biome formatting, linting, and import checks. |
-| `task check:write` | Apply safe Biome fixes. |
-| `task format` | Format the repository with Biome. |
-| `task lint` | Run Biome lint rules only. |
-| `task typecheck` | Generate Next route types and run TypeScript with `noEmit`. |
-| `task test` | Start Vitest in watch mode. |
-| `task test:run` | Run Vitest once. |
-| `task e2e` | Run Playwright tests across Chromium, Firefox, and WebKit. |
-| `task e2e:ui` | Open the Playwright UI runner. |
-| `task db:start` | Start the local Supabase stack. |
-| `task db:stop` | Stop the local Supabase stack. |
-| `task db:reset` | Reset the local Supabase database. |
-| `task db:pull` | Pull remote schema changes into Supabase migrations. |
-| `task db:types` | Generate local Supabase TypeScript database types. |
-| `task db:introspect` | Introspect the database with Drizzle Kit. |
-| `task email:dev` | Start the React Email preview server. |
-| `task verify` | Run local pre-PR checks except browser E2E tests. |
-| `task verify:all` | Run all validation, including browser E2E tests. |
+Run `task` or `task --list` to discover available tasks. Forward extra arguments to an underlying command with `--`, for example `task email:dev -- --port 3001`.
 
 ## Validation Before Opening a PR
 
