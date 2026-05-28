@@ -68,12 +68,20 @@ Supabase SQL migrations are the source of truth for schema changes. Generate Typ
 
 This project uses [Task](https://taskfile.dev) for local commands. Run `task` to list available tasks.
 
+Create pull requests with the repository template:
+
+```bash
+task pr:create -- --draft --title "Short summary" --base main
+```
+
+If you use another GitHub client, fill `.github/pull_request_template.md` manually and keep every heading.
+
 ## Project Structure
 
 ```text
 src/app/                 Next.js App Router routes, layout, and global CSS
 src/components/ui/       shadcn/ui-owned primitives
-src/db/                  Generated Supabase database types
+src/db/                  Generated Supabase database types from `task db:types`
 src/env.ts               Typed environment variable contract
 src/lib/                 Shared utilities
 src/test/                Vitest setup
