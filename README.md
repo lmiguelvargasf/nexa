@@ -82,10 +82,3 @@ e2e/                     Playwright tests
 emails/                  React Email templates
 supabase/                Supabase local config and migrations
 ```
-
-## Notes for Agents
-
-- Read [AGENTS.md](./AGENTS.md) before changing code.
-- This project uses Next.js 16. Use `node_modules/next/dist/docs/` as the local source of truth for framework behavior.
-- Prefer existing Task tasks over ad hoc commands.
-- Do not commit secrets. `.env.local` is ignored; `.env.example` is the committed contract.
