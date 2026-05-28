@@ -2,11 +2,7 @@
 version: "3.17"
 
 vars:
-  MISE: mise
-  TASK: task
-  BUN: bun
-  BUN_RUN: "{{.BUN}} run"
-  BUNX: bunx
+  BUN_RUN: bun run
 
 dotenv:
   - .env.local
@@ -16,15 +12,15 @@ tasks:
     desc: List available tasks
     silent: true
     cmds:
-      - "{{.TASK}} --list"
+      - task --list
 
   setup:
     desc: Install pinned tools, dependencies, env file, and Playwright browsers
     cmds:
-      - "{{.MISE}} install --yes --locked"
-      - "{{.TASK}} env:init"
-      - "{{.TASK}} install"
-      - "{{.TASK}} playwright:install"
+      - mise install --yes --locked
+      - task env:init
+      - task install
+      - task playwright:install
 
   env:init:
     desc: Create .env.local from .env.example when it does not exist
@@ -37,7 +33,7 @@ tasks:
     desc: Install Bun dependencies
     aliases: [deps]
     cmds:
-      - "{{.BUN}} install"
+      - bun install
 
   dev:
     desc: Start the Next.js development server
@@ -113,7 +109,7 @@ tasks:
   playwright:install:
     desc: Install Playwright browser binaries
     cmds:
-      - "{{.BUNX}} playwright install {{.CLI_ARGS}}"
+      - bunx playwright install {{.CLI_ARGS}}
 
   verify:
     desc: Run local pre-PR checks except browser E2E tests
@@ -172,4 +168,4 @@ tasks:
   next:info:
     desc: Print Next.js diagnostic information
     cmds:
-      - "{{.BUNX}} next info {{.CLI_ARGS}}"
+      - bunx next info {{.CLI_ARGS}}
