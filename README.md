@@ -68,14 +68,6 @@ Supabase SQL migrations are the source of truth for schema changes. Generate Typ
 
 This project uses [Task](https://taskfile.dev) for local commands. Run `task` to list available tasks.
 
-Create pull requests with the repository template:
-
-```bash
-task pr:create -- --draft --title "Short summary" --base main
-```
-
-If you use another GitHub client, fill `.github/pull_request_template.md` manually and keep every heading.
-
 ## Project Structure
 
 ```text
