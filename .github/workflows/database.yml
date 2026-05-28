@@ -64,7 +64,7 @@ jobs:
         run: task db:start
 
       - name: Reset database
-        run: task db:reset
+        run: bunx supabase db reset --local --yes
 
       - name: Lint database
         run: bunx supabase db lint --local --fail-on warning
