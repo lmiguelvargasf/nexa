@@ -67,19 +67,7 @@ Supabase migrations are the source of truth for schema changes. Drizzle is confi
 
 ## Common Tasks
 
-```bash
-task              # list tasks
-task check        # Biome checks
-task typecheck    # Next route types + TypeScript
-task test:run     # unit tests
-task verify:all   # full local validation
-```
-
-Forward extra arguments with `--`, for example:
-
-```bash
-task email:dev -- --port 3001
-```
+This project uses [Task](https://taskfile.dev) for local commands. Run `task` to list available tasks.
 
 ## Project Structure
 
