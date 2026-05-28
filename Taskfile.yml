@@ -15,12 +15,13 @@ tasks:
       - task --list
 
   setup:
-    desc: Install pinned tools, dependencies, env file, and Playwright browsers
+    desc: Install pinned tools, dependencies, env file, Playwright browsers, and Git hooks
     cmds:
       - mise install --yes --locked
       - task: env:init
       - task: install
       - task: playwright:install
+      - task: hooks:install
 
   env:init:
     desc: Create .env.local from .env.example when it does not exist
@@ -84,6 +85,16 @@ tasks:
     aliases: [fix]
     cmds:
       - "{{.BUN_RUN}} check:write {{.CLI_ARGS}}"
+
+  hooks:install:
+    desc: Install prek Git hooks
+    cmds:
+      - mise exec -- prek install --prepare-hooks {{.CLI_ARGS}}
+
+  hooks:run:
+    desc: Run prek hooks against the whole repository
+    cmds:
+      - mise exec -- prek run --all-files {{.CLI_ARGS}}
 
   test:
     desc: Run Vitest in watch mode

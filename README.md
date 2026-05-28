@@ -22,6 +22,7 @@
 [![Sentry](https://img.shields.io/badge/Sentry-errors-362d59?logo=sentry&logoColor=white)](https://docs.sentry.io)
 [![PostHog](https://img.shields.io/badge/PostHog-analytics-f54e00?logo=posthog&logoColor=white)](https://posthog.com/docs)
 [![Biome](https://img.shields.io/badge/Biome-v2-60a5fa?logo=biome&logoColor=white)](https://biomejs.dev)
+[![prek](https://img.shields.io/badge/prek-git_hooks-111827)](https://github.com/j178/prek)
 [![Vitest](https://img.shields.io/badge/Vitest-unit_tests-6e9f18?logo=vitest&logoColor=white)](https://vitest.dev)
 [![Playwright](https://img.shields.io/badge/Playwright-E2E-2ead33?logo=playwright&logoColor=white)](https://playwright.dev)
 
