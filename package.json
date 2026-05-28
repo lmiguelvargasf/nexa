@@ -24,8 +24,7 @@
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
     "db:pull": "supabase db pull",
-    "db:types": "supabase gen types typescript --local > src/db/database.types.ts",
-    "db:introspect": "drizzle-kit introspect",
+    "db:types": "mkdir -p src/db && supabase gen types typescript --local > src/db/database.types.ts",
     "email:dev": "email dev --dir emails"
   },
   "dependencies": {
@@ -43,10 +42,8 @@
     "ai": "^6.0.192",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.17.0",
     "next": "^16.2.6",
-    "postgres": "^3.4.9",
     "posthog-js": "^1.376.4",
     "posthog-node": "^5.35.6",
     "radix-ui": "^1.4.3",
@@ -71,7 +68,6 @@
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
-    "drizzle-kit": "^0.31.10",
     "jsdom": "^29.1.1",
     "react-email": "^6.5.0",
     "supabase": "^2.101.0",

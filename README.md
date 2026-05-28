@@ -11,7 +11,6 @@
 [![shadcn/ui](https://img.shields.io/badge/shadcn%2Fui-components-111827)](https://ui.shadcn.com)
 [![Radix UI](https://img.shields.io/badge/Radix_UI-primitives-161618?logo=radixui)](https://www.radix-ui.com/primitives)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres-3ecf8e?logo=supabase&logoColor=white)](https://supabase.com/docs)
-[![Drizzle](https://img.shields.io/badge/Drizzle-ORM-c5f74f)](https://orm.drizzle.team)
 [![Zod](https://img.shields.io/badge/Zod-validation-3068b7)](https://zod.dev)
 [![TanStack Query](https://img.shields.io/badge/TanStack_Query-cache-ff4154?logo=reactquery&logoColor=white)](https://tanstack.com/query)
 [![AI SDK](https://img.shields.io/badge/AI_SDK-integrations-111827)](https://ai-sdk.dev)
@@ -26,7 +25,7 @@
 [![Vitest](https://img.shields.io/badge/Vitest-unit_tests-6e9f18?logo=vitest&logoColor=white)](https://vitest.dev)
 [![Playwright](https://img.shields.io/badge/Playwright-E2E-2ead33?logo=playwright&logoColor=white)](https://playwright.dev)
 
-Nexa is a Next.js 16 App Router app for a modern full-stack product workflow. It uses React 19, TypeScript, Tailwind CSS v4, Supabase Postgres, Drizzle, AI SDK providers, transactional email, payments, analytics, Biome, Vitest, and Playwright.
+Nexa is a Next.js 16 App Router app for a modern full-stack product workflow. It uses React 19, TypeScript, Tailwind CSS v4, Supabase Postgres, AI SDK providers, transactional email, payments, analytics, Biome, Vitest, and Playwright.
 
 ## Requirements
 
@@ -60,11 +59,10 @@ Useful database tasks:
 ```bash
 task db:reset
 task db:types
-task db:introspect
 task db:stop
 ```
 
-Supabase migrations are the source of truth for schema changes. Drizzle is configured for type-safe queries and introspection, not for owning migrations.
+Supabase SQL migrations are the source of truth for schema changes. Generate TypeScript database types from the local Supabase schema with `task db:types`.
 
 ## Common Tasks
 
@@ -75,7 +73,7 @@ This project uses [Task](https://taskfile.dev) for local commands. Run `task` to
 ```text
 src/app/                 Next.js App Router routes, layout, and global CSS
 src/components/ui/       shadcn/ui-owned primitives
-src/db/                  Drizzle schema placeholder and generated DB types
+src/db/                  Generated Supabase database types
 src/env.ts               Typed environment variable contract
 src/lib/                 Shared utilities
 src/test/                Vitest setup
