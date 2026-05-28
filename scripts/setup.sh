@@ -96,6 +96,9 @@ main() {
   log "Installing Playwright browsers"
   task playwright:install
 
+  log "Installing Git hooks"
+  task hooks:install
+
   check_docker
 
   log "Setup complete"

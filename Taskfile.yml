@@ -15,12 +15,13 @@ tasks:
       - task --list
 
   setup:
-    desc: Install pinned tools, dependencies, env file, and Playwright browsers
+    desc: Install pinned tools, dependencies, env file, Playwright browsers, and Git hooks
     cmds:
       - mise install --yes --locked
       - task: env:init
       - task: install
       - task: playwright:install
+      - task: hooks:install
 
   env:init:
     desc: Create .env.local from .env.example when it does not exist
