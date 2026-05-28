@@ -33,6 +33,12 @@ Nexa is a Next.js 16 App Router app for a modern full-stack product workflow. It
 - [mise](https://mise.jdx.dev/installing-mise.html) for pinned Node.js, Bun, Task, and GitHub CLI versions.
 - [Docker](https://docs.docker.com/get-started/get-docker/) for local Supabase.
 
+This repo assumes your shell activates mise so direct commands like `task dev` use the pinned project tools. For zsh, add this near the end of `~/.zshrc` after other PATH setup such as Bun or NVM, then open a new terminal:
+
+```bash
+eval "$(mise activate zsh)"
+```
+
 The setup script can install `mise` for you on macOS when Homebrew is available. On Linux, install `mise` first and rerun the script.
 
 ## Initialize Locally
@@ -46,19 +52,19 @@ The script installs pinned tools, creates `.env.local` from `.env.example` when 
 Start the app:
 
 ```bash
-mise exec -- task dev
+task dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-If you have activated the mise shell integration, you can run `task dev` directly.
+If `task --version` does not match the version in `mise.toml`, restart your shell and confirm mise activation is loaded.
 
 ## Local Supabase
 
 Docker must be running before starting Supabase.
 
 ```bash
-mise exec -- task db:start
+task db:start
 ```
 
 Copy the local API URL, anon key, and database URL from the Supabase CLI output into `.env.local`. Typical local values use these ports:
@@ -71,10 +77,10 @@ DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 Useful database tasks:
 
 ```bash
-mise exec -- task db:reset
-mise exec -- task db:types
-mise exec -- task db:introspect
-mise exec -- task db:stop
+task db:reset
+task db:types
+task db:introspect
+task db:stop
 ```
 
 Supabase migrations are the source of truth for schema changes. Drizzle is configured for type-safe queries and introspection, not for owning migrations.
@@ -82,17 +88,17 @@ Supabase migrations are the source of truth for schema changes. Drizzle is confi
 ## Common Tasks
 
 ```bash
-mise exec -- task              # list tasks
-mise exec -- task check        # Biome checks
-mise exec -- task typecheck    # Next route types + TypeScript
-mise exec -- task test:run     # unit tests
-mise exec -- task verify:all   # full local validation
+task              # list tasks
+task check        # Biome checks
+task typecheck    # Next route types + TypeScript
+task test:run     # unit tests
+task verify:all   # full local validation
 ```
 
 Forward extra arguments with `--`, for example:
 
 ```bash
-mise exec -- task email:dev -- --port 3001
+task email:dev -- --port 3001
 ```
 
 ## Project Structure

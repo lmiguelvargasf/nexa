@@ -59,6 +59,12 @@ create_env_file() {
   cp .env.example .env.local
 }
 
+activate_mise() {
+  log "Activating mise for setup"
+  eval "$(mise activate bash)"
+  hash -r
+}
+
 check_docker() {
   if ! command -v docker >/dev/null 2>&1; then
     warn "Docker is not installed. Install Docker before using local Supabase."
@@ -78,19 +84,20 @@ main() {
 
   log "Installing pinned tools from mise.toml"
   mise install --yes --locked
+  activate_mise
 
   create_env_file
 
   log "Installing Bun dependencies"
-  mise exec -- task install
+  task install
 
   log "Installing Playwright browsers"
-  mise exec -- task playwright:install
+  task playwright:install
 
   check_docker
 
   log "Setup complete"
-  printf "Start the app with: mise exec -- task dev\n"
+  printf "Start the app with: task dev\n"
 }
 
 main "$@"
