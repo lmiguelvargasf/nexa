@@ -73,7 +73,7 @@ This project uses [Task](https://taskfile.dev) for local commands. Run `task` to
 ```text
 src/app/                 Next.js App Router routes, layout, and global CSS
 src/components/ui/       shadcn/ui-owned primitives
-src/db/                  Generated Supabase database types
+src/db/                  Generated Supabase database types from `task db:types`
 src/env.ts               Typed environment variable contract
 src/lib/                 Shared utilities
 src/test/                Vitest setup

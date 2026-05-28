@@ -137,6 +137,11 @@ tasks:
       - task: verify
       - task: e2e
 
+  pr:create:
+    desc: Create a GitHub pull request with the repository PR template
+    cmds:
+      - gh pr create --template .github/pull_request_template.md {{.CLI_ARGS}}
+
   db:start:
     desc: Start the local Supabase stack
     cmds:
