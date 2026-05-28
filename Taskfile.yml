@@ -85,6 +85,16 @@ tasks:
     cmds:
       - "{{.BUN_RUN}} check:write {{.CLI_ARGS}}"
 
+  hooks:install:
+    desc: Install prek Git hooks
+    cmds:
+      - mise exec -- prek install --prepare-hooks {{.CLI_ARGS}}
+
+  hooks:run:
+    desc: Run prek hooks against the whole repository
+    cmds:
+      - mise exec -- prek run --all-files {{.CLI_ARGS}}
+
   test:
     desc: Run Vitest in watch mode
     cmds:
