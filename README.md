@@ -70,18 +70,6 @@ Supabase migrations are the source of truth for schema changes. Drizzle is confi
 
 This project uses [Task](https://taskfile.dev) for local commands. Run `task` to list available tasks.
 
-Setup installs the local Git hooks automatically. Reinstall them manually with:
-
-```bash
-task hooks:install
-```
-
-Run the hooks across the whole repository:
-
-```bash
-task hooks:run
-```
-
 ## Project Structure
 
 ```text
