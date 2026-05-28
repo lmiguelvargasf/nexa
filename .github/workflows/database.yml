@@ -9,7 +9,6 @@ on:
       - "mise.lock"
       - "mise.toml"
       - "package.json"
-      - "src/db/**"
       - "supabase/**"
   push:
     branches:
@@ -21,7 +20,6 @@ on:
       - "mise.lock"
       - "mise.toml"
       - "package.json"
-      - "src/db/**"
       - "supabase/**"
   workflow_dispatch:
 
@@ -66,12 +64,7 @@ jobs:
         run: task db:start
 
       - name: Reset database
-        run: |
-          if [ -f supabase/seed.sql ]; then
-            task db:reset
-          else
-            bunx supabase db reset --local --no-seed
-          fi
+        run: task db:reset
 
       - name: Lint database
         run: bunx supabase db lint --local --fail-on warning
