@@ -30,12 +30,9 @@ Nexa is a Next.js 16 App Router app for a modern full-stack product workflow. It
 ## Requirements
 
 - macOS or Linux.
-- [mise](https://mise.jdx.dev/installing-mise.html) for pinned Node.js, Bun, Task, and GitHub CLI versions.
 - [Docker](https://docs.docker.com/get-started/get-docker/) for local Supabase.
 
-This repo assumes your shell activates mise so direct commands like `task dev` use the pinned project tools.
-
-The setup script can install `mise` for you on macOS when Homebrew is available. On Linux, install `mise` first and rerun the script.
+The setup script bootstraps [mise](https://mise.jdx.dev) and the pinned Node.js, Bun, Task, and GitHub CLI versions. This repo assumes your shell activates mise so direct commands like `task dev` use the pinned project tools.
 
 ## Initialize Locally
 

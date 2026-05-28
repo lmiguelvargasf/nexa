@@ -36,16 +36,18 @@ ensure_mise() {
   fi
 
   if ! command -v mise >/dev/null 2>&1; then
-    cat >&2 <<'EOF'
-error: mise is required but was not found.
+    if ! command -v curl >/dev/null 2>&1; then
+      die "curl is required to install mise."
+    fi
 
-Install mise, then run this script again:
-  curl https://mise.run | sh
+    log "Installing mise with the official installer"
+    curl -fsSL https://mise.run | sh
+    export PATH="$HOME/.local/bin:$PATH"
+    hash -r
+  fi
 
-On macOS with Homebrew:
-  brew install mise
-EOF
-    exit 1
+  if ! command -v mise >/dev/null 2>&1; then
+    die "mise was installed but is not available on PATH."
   fi
 }
 
