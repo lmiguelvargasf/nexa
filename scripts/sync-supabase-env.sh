@@ -72,20 +72,16 @@ ensure_env_file
 SUPABASE_ENV="$(
   bunx supabase status -o env \
     --override-name api.url=NEXT_PUBLIC_SUPABASE_URL \
-    --override-name auth.anon_key=NEXT_PUBLIC_SUPABASE_ANON_KEY \
-    --override-name db.url=DATABASE_URL
+    --override-name auth.anon_key=NEXT_PUBLIC_SUPABASE_ANON_KEY
 )" || die "Supabase is not running. Start it with task db:start."
 
 supabase_url="$(env_value NEXT_PUBLIC_SUPABASE_URL API_URL SUPABASE_URL)"
 supabase_anon_key="$(env_value NEXT_PUBLIC_SUPABASE_ANON_KEY ANON_KEY SUPABASE_ANON_KEY)"
-database_url="$(env_value DATABASE_URL DB_URL POSTGRES_URL)"
 
 [[ -n "$supabase_url" ]] || die "Could not read the local Supabase API URL."
 [[ -n "$supabase_anon_key" ]] || die "Could not read the local Supabase anon key."
-[[ -n "$database_url" ]] || die "Could not read the local Supabase database URL."
 
 set_env_var NEXT_PUBLIC_SUPABASE_URL "$supabase_url"
 set_env_var NEXT_PUBLIC_SUPABASE_ANON_KEY "$supabase_anon_key"
-set_env_var DATABASE_URL "$database_url"
 
 printf "Updated .env.local with local Supabase values.\n"

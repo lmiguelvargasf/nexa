@@ -163,14 +163,6 @@ tasks:
     cmds:
       - "{{.BUN_RUN}} db:types"
 
-  db:introspect:
-    desc: Introspect the database with Drizzle Kit
-    preconditions:
-      - sh: test -n "$DATABASE_URL"
-        msg: DATABASE_URL is required. Set it in .env.local or your shell.
-    cmds:
-      - "{{.BUN_RUN}} db:introspect {{.CLI_ARGS}}"
-
   email:dev:
     desc: Start the React Email preview server
     cmds:
