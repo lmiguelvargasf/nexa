@@ -18,9 +18,9 @@ tasks:
     desc: Install pinned tools, dependencies, env file, and Playwright browsers
     cmds:
       - mise install --yes --locked
-      - task env:init
-      - task install
-      - task playwright:install
+      - task: env:init
+      - task: install
+      - task: playwright:install
 
   env:init:
     desc: Create .env.local from .env.example when it does not exist
