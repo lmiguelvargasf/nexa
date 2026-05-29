@@ -41,6 +41,8 @@ tasks:
     aliases: [up]
     cmds:
       - task: db:start
+        vars:
+          CLI_ARGS: ""
       - "{{.BUN_RUN}} dev {{.CLI_ARGS}}"
 
   app:
