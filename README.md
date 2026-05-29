@@ -48,36 +48,14 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Local Supabase
 
-Docker must be running before starting Supabase.
+Only start Supabase when you need the local database. Start Docker, then run:
 
 ```bash
 task db:start
 ```
 
-Useful database tasks:
-
-```bash
-task db:reset
-task db:types
-task db:stop
-```
-
-Supabase SQL migrations are the source of truth for schema changes. Generate TypeScript database types from the local Supabase schema with `task db:types`.
+For schema changes, add SQL migrations and regenerate TypeScript database types with `task db:types`.
 
 ## Common Tasks
 
 This project uses [Task](https://taskfile.dev) for local commands. Run `task` to list available tasks.
-
-## Project Structure
-
-```text
-src/app/                 Next.js App Router routes, layout, and global CSS
-src/components/ui/       shadcn/ui-owned primitives
-src/db/                  Generated Supabase database types from `task db:types`
-src/env.ts               Typed environment variable contract
-src/lib/                 Shared utilities
-src/test/                Vitest setup
-e2e/                     Playwright tests
-emails/                  React Email templates
-supabase/                Supabase local config and migrations
-```
