@@ -68,10 +68,10 @@ export default function Home() {
 
             return (
               <article
-                className="flex min-h-36 gap-4 rounded-[8px] border border-border bg-card p-5 text-card-foreground"
+                className="flex min-h-36 gap-4 rounded-md border border-border bg-card p-5 text-card-foreground"
                 key={item.label}
               >
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-[8px] bg-primary text-primary-foreground">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
                   <Icon />
                 </div>
                 <div className="flex flex-col gap-2">

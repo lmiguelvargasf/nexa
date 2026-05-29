@@ -14,12 +14,22 @@ type WelcomeTemplateProps = {
   name?: string;
 };
 
-const defaultAppUrl = process.env.APP_URL ?? "http://localhost:3000";
+const localAppUrl = "http://localhost:3000";
+
+function appUrlOrDefault(value: string | undefined) {
+  const trimmedValue = value?.trim();
+
+  return trimmedValue ? trimmedValue : localAppUrl;
+}
+
+const defaultAppUrl = appUrlOrDefault(process.env.APP_URL);
 
 export default function WelcomeTemplate({
-  appUrl = defaultAppUrl,
+  appUrl,
   name = "there",
 }: WelcomeTemplateProps) {
+  const resolvedAppUrl = appUrlOrDefault(appUrl ?? defaultAppUrl);
+
   return (
     <Html lang="en">
       <Head />
@@ -29,7 +39,7 @@ export default function WelcomeTemplate({
           <Heading style={heading}>Welcome to Nexa</Heading>
           <Text style={paragraph}>Hello {name},</Text>
           <Text style={paragraph}>Your Nexa workspace is ready.</Text>
-          <Button href={appUrl} style={button}>
+          <Button href={resolvedAppUrl} style={button}>
             Open Nexa
           </Button>
         </Container>
