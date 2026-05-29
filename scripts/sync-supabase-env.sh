@@ -77,15 +77,11 @@ SUPABASE_ENV="$(
 
 supabase_url="$(env_value NEXT_PUBLIC_SUPABASE_URL API_URL SUPABASE_URL)"
 supabase_anon_key="$(env_value NEXT_PUBLIC_SUPABASE_ANON_KEY ANON_KEY SUPABASE_ANON_KEY)"
-database_url="$(env_value DATABASE_URL DB_URL POSTGRES_URL)"
 
 [[ -n "$supabase_url" ]] || die "Could not read the local Supabase API URL."
 [[ -n "$supabase_anon_key" ]] || die "Could not read the local Supabase anon key."
 
 set_env_var NEXT_PUBLIC_SUPABASE_URL "$supabase_url"
 set_env_var NEXT_PUBLIC_SUPABASE_ANON_KEY "$supabase_anon_key"
-if [[ -n "$database_url" ]]; then
-  set_env_var DATABASE_URL "$database_url"
-fi
 
 printf "Updated .env.local with local Supabase values.\n"
