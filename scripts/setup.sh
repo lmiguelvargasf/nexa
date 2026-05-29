@@ -69,12 +69,12 @@ activate_mise() {
 
 check_docker() {
   if ! command -v docker >/dev/null 2>&1; then
-    warn "Docker is not installed. Install Docker before using local Supabase."
+    warn "Docker is not installed. Install Docker before running task dev."
     return
   fi
 
   if ! docker info >/dev/null 2>&1; then
-    warn "Docker is installed but not running. Start Docker before using local Supabase."
+    warn "Docker is installed but not running. Start Docker before running task dev."
   fi
 }
 
@@ -102,7 +102,7 @@ main() {
   check_docker
 
   log "Setup complete"
-  printf "Start the app with: task dev\n"
+  printf "Start the local stack with: task dev\n"
 }
 
 main "$@"

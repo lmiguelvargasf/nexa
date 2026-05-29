@@ -30,7 +30,7 @@ Nexa is a Next.js 16 App Router app for a modern full-stack product workflow. It
 ## Requirements
 
 - macOS or Linux.
-- [Docker](https://docs.docker.com/get-started/get-docker/) for local Supabase.
+- [Docker](https://docs.docker.com/get-started/get-docker/) for the local Supabase database.
 
 ## Initialize Locally
 
@@ -38,7 +38,7 @@ Nexa is a Next.js 16 App Router app for a modern full-stack product workflow. It
 ./scripts/setup.sh
 ```
 
-Start the app:
+Start Docker, then start the local stack:
 
 ```bash
 task dev
@@ -46,38 +46,10 @@ task dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Local Supabase
+## Database Schema
 
-Docker must be running before starting Supabase.
-
-```bash
-task db:start
-```
-
-Useful database tasks:
-
-```bash
-task db:reset
-task db:types
-task db:stop
-```
-
-Supabase SQL migrations are the source of truth for schema changes. Generate TypeScript database types from the local Supabase schema with `task db:types`.
+Supabase SQL migrations are the source of truth for schema changes. After changing migrations, regenerate TypeScript database types with `task db:types`.
 
 ## Common Tasks
 
 This project uses [Task](https://taskfile.dev) for local commands. Run `task` to list available tasks.
-
-## Project Structure
-
-```text
-src/app/                 Next.js App Router routes, layout, and global CSS
-src/components/ui/       shadcn/ui-owned primitives
-src/db/                  Generated Supabase database types from `task db:types`
-src/env.ts               Typed environment variable contract
-src/lib/                 Shared utilities
-src/test/                Vitest setup
-e2e/                     Playwright tests
-emails/                  React Email templates
-supabase/                Supabase local config and migrations
-```

@@ -37,16 +37,18 @@ tasks:
       - bun install
 
   dev:
-    desc: Start the Next.js development server
-    aliases: [app]
-    cmds:
-      - "{{.BUN_RUN}} dev {{.CLI_ARGS}}"
-
-  up:
     desc: Start local Supabase, then the Next.js development server
+    aliases: [up]
     cmds:
       - task: db:start
-      - task: dev
+        vars:
+          CLI_ARGS: ""
+      - "{{.BUN_RUN}} dev {{.CLI_ARGS}}"
+
+  app:
+    desc: Start only the Next.js development server
+    cmds:
+      - "{{.BUN_RUN}} dev {{.CLI_ARGS}}"
 
   build:
     desc: Create a production Next.js build
