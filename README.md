@@ -50,6 +50,10 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Supabase SQL migrations are the source of truth for schema changes. After changing migrations, regenerate TypeScript database types with `task db:types`.
 
+## Validation
+
+Use `task verify` before opening a PR and `task verify:all` when browser coverage matters. Run `task audit` after dependency changes. The app exposes `/api/health` as a deploy/runtime smoke check.
+
 ## Common Tasks
 
 This project uses [Task](https://taskfile.dev) for local commands. Run `task` to list available tasks.

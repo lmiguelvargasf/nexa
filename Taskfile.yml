@@ -2,7 +2,10 @@
 version: "3.17"
 
 vars:
-  BUN_RUN: bun run
+  BUN: mise exec -- bun
+  BUN_RUN: mise exec -- bun run
+  BUNX: mise exec -- bunx
+  GH: mise exec -- gh
 
 dotenv:
   - .env.local
@@ -34,7 +37,7 @@ tasks:
     desc: Install Bun dependencies
     aliases: [deps]
     cmds:
-      - bun install
+      - "{{.BUN}} install"
 
   dev:
     desc: Start local Supabase, then the Next.js development server
@@ -122,7 +125,12 @@ tasks:
   playwright:install:
     desc: Install Playwright browser binaries
     cmds:
-      - bunx playwright install {{.CLI_ARGS}}
+      - "{{.BUNX}} playwright install {{.CLI_ARGS}}"
+
+  audit:
+    desc: Run a Bun dependency advisory audit
+    cmds:
+      - "{{.BUN}} audit {{.CLI_ARGS}}"
 
   verify:
     desc: Run local pre-PR checks except browser E2E tests
@@ -142,13 +150,13 @@ tasks:
   pr:create:
     desc: Create a GitHub pull request with the repository PR template
     cmds:
-      - gh pr create --template .github/pull_request_template.md {{.CLI_ARGS}}
+      - "{{.GH}} pr create --template .github/pull_request_template.md {{.CLI_ARGS}}"
 
   db:start:
     desc: Start the local Supabase stack
     cmds:
       - "{{.BUN_RUN}} db:start {{.CLI_ARGS}}"
-      - ./scripts/sync-supabase-env.sh
+      - mise exec -- ./scripts/sync-supabase-env.sh
 
   db:stop:
     desc: Stop the local Supabase stack
@@ -178,4 +186,4 @@ tasks:
   next:info:
     desc: Print Next.js diagnostic information
     cmds:
-      - bunx next info {{.CLI_ARGS}}
+      - "{{.BUNX}} next info {{.CLI_ARGS}}"
