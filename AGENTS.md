@@ -12,9 +12,11 @@
 - Dev server: `task dev`
 - Pre-PR validation: `task verify`
 - Full validation, including browser E2E: `task verify:all`
+- Dependency audit: `task audit`
 - Local Supabase: `task db:start`
 - Regenerate Supabase types: `task db:types`
 - Email preview: `task email:dev`
+- Runtime smoke check: `/api/health`
 - Create a templated PR: `task pr:create -- --draft --title "..." --base main`
 
 ## Repo Map

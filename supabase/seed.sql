@@ -1,0 +1,2 @@
+-- Keep this file so `supabase db reset` has an explicit seed entry point.
+-- Add idempotent development seed data here once the first schema migration exists.
