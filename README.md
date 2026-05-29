@@ -46,6 +46,31 @@ task dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Agent Skills
+
+This template includes project-scoped agent skills in `.agents/skills`, with versions tracked in `skills-lock.json`. They are repo-local context for skills-compatible AI coding agents and are not installed globally.
+
+- **Next.js best practices** (`next-best-practices`)
+  Use when changing routes, layouts, metadata, route handlers, Server Components, caching, or framework APIs.
+
+- **Vercel React best practices** (`vercel-react-best-practices`)
+  Use when writing, reviewing, or refactoring React/TSX and client/server rendering behavior.
+
+- **shadcn/ui** (`shadcn`)
+  Use when adding, composing, styling, or debugging shadcn/ui components.
+
+- **Supabase** (`supabase`)
+  Use for Supabase app, auth, storage, realtime, migration, or client integration work.
+
+- **Supabase Postgres best practices** (`supabase-postgres-best-practices`)
+  Use when writing SQL migrations, reviewing schema design, or optimizing queries.
+
+- **Playwright** (`playwright`)
+  Use when inspecting local app behavior, screenshots, forms, browser logs, or interactive flows.
+
+- **Receiving code review** (`receiving-code-review`)
+  Use when responding to PR or code review feedback before implementing changes.
+
 ## Database Schema
 
 Supabase SQL migrations are the source of truth for schema changes. After changing migrations, regenerate TypeScript database types with `task db:types`.
