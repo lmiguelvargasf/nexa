@@ -37,6 +37,12 @@
 - Use lucide icons for UI iconography.
 - Add or update tests near the changed behavior when practical.
 
+## Agent Skills
+
+- Project-scoped skills live in `.agents/skills`; use them when relevant to the task.
+- Skills supplement this guide; repo instructions and local Next.js docs remain authoritative.
+- Do not install global skills with `-g` unless the user explicitly asks.
+
 ## Pull Requests
 
 - Preserve every PR template heading.
