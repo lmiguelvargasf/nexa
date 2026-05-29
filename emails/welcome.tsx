@@ -9,17 +9,17 @@ import {
   Text,
 } from "@react-email/components";
 
-type WelcomeEmailProps = {
+type WelcomeTemplateProps = {
   appUrl?: string;
   name?: string;
 };
 
 const defaultAppUrl = process.env.APP_URL ?? "http://localhost:3000";
 
-export default function WelcomeEmail({
+export default function WelcomeTemplate({
   appUrl = defaultAppUrl,
   name = "there",
-}: WelcomeEmailProps) {
+}: WelcomeTemplateProps) {
   return (
     <Html lang="en">
       <Head />
@@ -38,10 +38,10 @@ export default function WelcomeEmail({
   );
 }
 
-WelcomeEmail.PreviewProps = {
+WelcomeTemplate.PreviewProps = {
   appUrl: "http://localhost:3000",
   name: "Ada",
-} satisfies WelcomeEmailProps;
+} satisfies WelcomeTemplateProps;
 
 const main = {
   backgroundColor: "#f6f7f9",
