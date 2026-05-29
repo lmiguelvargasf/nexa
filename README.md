@@ -53,3 +53,5 @@ Supabase SQL migrations are the source of truth for schema changes. After changi
 ## Common Tasks
 
 This project uses [Task](https://taskfile.dev) for local commands. Run `task` to list available tasks.
+
+React Email previews use `@react-email/ui` as a direct dev dependency so `task email:dev` can start non-interactively.
