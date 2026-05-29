@@ -30,7 +30,7 @@ Nexa is a Next.js 16 App Router app for a modern full-stack product workflow. It
 ## Requirements
 
 - macOS or Linux.
-- [Docker](https://docs.docker.com/get-started/get-docker/) for local Supabase.
+- [Docker](https://docs.docker.com/get-started/get-docker/) for the local Supabase database.
 
 ## Initialize Locally
 
@@ -38,7 +38,7 @@ Nexa is a Next.js 16 App Router app for a modern full-stack product workflow. It
 ./scripts/setup.sh
 ```
 
-Start the app:
+Start Docker, then start the local stack:
 
 ```bash
 task dev
@@ -46,15 +46,9 @@ task dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Local Supabase
+## Database Schema
 
-Only start Supabase when you need the local database. Start Docker, then run:
-
-```bash
-task db:start
-```
-
-For schema changes, add SQL migrations and regenerate TypeScript database types with `task db:types`.
+Supabase SQL migrations are the source of truth for schema changes. After changing migrations, regenerate TypeScript database types with `task db:types`.
 
 ## Common Tasks
 
