@@ -45,6 +45,17 @@
 - Skills supplement this guide; repo instructions and local Next.js docs remain authoritative.
 - Do not install global skills with `-g` unless the user explicitly asks.
 
+## GitHub Issues
+
+- Use the project-scoped `github-issues` skill for issue work, with the existing authenticated `gh` CLI for reads and writes; GitHub MCP is optional. Resolve the destination from the current clone's GitHub repository before writing; never assume Nexa's original repository or an upstream example.
+- Use the applicable `.github/ISSUE_TEMPLATE/` template first. This overrides the skill's instruction to always use its bundled templates; use those only when no repository template applies.
+- Before creating an issue, search open and closed issues and read plausible matches. Distinguish duplicates from regressions and related work.
+- Preserve reported facts, verified observations, reproduction attempts, and unknowns. Attempt reproduction when practical; unsuccessful or unavailable reproduction does not block recording a legitimate report.
+- For implementation-ready work, capture observable acceptance criteria, important constraints, scope exclusions, and a source specification when available. Preserve supplied decisions; do not invent missing decisions or require a specification. Keep small work in one issue unless decomposition is requested or necessary and agreed.
+- Read an issue before updating it; preserve unrelated content and metadata. Use the repository's actual labels and types, without inventing defaults.
+- Verify requested writes. If a result is uncertain, inspect current state before retrying and reuse successful creations. Keep source links, parent/sub-issue grouping, and blocking dependencies distinct; verify native relationships when requested.
+- Close issues with a meaningful reason and supporting evidence, such as a fix or canonical duplicate. Creating child issues does not complete their parent.
+
 ## Pull Requests
 
 - Preserve every PR template heading.

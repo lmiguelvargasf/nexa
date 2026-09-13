@@ -13,6 +13,13 @@
       "skillPath": "skills/frontend-design/SKILL.md",
       "computedHash": "063a0e6448123cd359ad0044cc46b0e490cc7964d45ef4bb9fd842bd2ffbca67"
     },
+    "github-issues": {
+      "source": "github/awesome-copilot",
+      "ref": "7568a482ce2df38f8965ab5336a3220db796a4ba",
+      "sourceType": "github",
+      "skillPath": "skills/github-issues/SKILL.md",
+      "computedHash": "3eb6f99553920d6d94e47cb9e31432b10e2a6a235d9fc972165ec824a71ba0e9"
+    },
     "next-best-practices": {
       "source": "vercel/nextjs-skills",
       "sourceType": "github",

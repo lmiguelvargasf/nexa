@@ -53,3 +53,8 @@ Supabase SQL migrations are the source of truth for schema changes. After changi
 ## Common Tasks
 
 This project uses [Task](https://taskfile.dev) for local commands. Run `task` to list available tasks.
+
+## GitHub Issues
+
+Agents use the project-scoped `github-issues` skill with this repository's issue
+policy and templates. See [skill provenance and updates](docs/github-issues.md).

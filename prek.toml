@@ -16,10 +16,11 @@ hooks = [
   { id = "check-yaml" },
   { id = "destroyed-symlinks" },
   { id = "detect-private-key" },
-  { id = "end-of-file-fixer" },
-  { id = "fix-byte-order-marker" },
-  { id = "mixed-line-ending", args = ["--fix=lf"] },
-  { id = "trailing-whitespace", args = ["--markdown-linebreak-ext=md"] },
+  # Keep the vendored github-issues skill byte-for-byte identical to upstream.
+  { id = "end-of-file-fixer", exclude = '^\.agents/(skills/github-issues/|licenses/github-awesome-copilot-LICENSE$)' },
+  { id = "fix-byte-order-marker", exclude = '^\.agents/(skills/github-issues/|licenses/github-awesome-copilot-LICENSE$)' },
+  { id = "mixed-line-ending", args = ["--fix=lf"], exclude = '^\.agents/(skills/github-issues/|licenses/github-awesome-copilot-LICENSE$)' },
+  { id = "trailing-whitespace", args = ["--markdown-linebreak-ext=md"], exclude = '^\.agents/(skills/github-issues/|licenses/github-awesome-copilot-LICENSE$)' },
 ]
 
 [[repos]]
