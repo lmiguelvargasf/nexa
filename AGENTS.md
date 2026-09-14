@@ -17,7 +17,7 @@
 - Regenerate Supabase types: `task db:types`
 - Email preview: `task email:dev`
 - Runtime smoke check: `/api/health`
-- Create a templated PR: `task pr:create -- --draft --title "..." --base main`
+- Create a templated PR: `task pr:create -- --title "..." --base main`
 
 ## Repo Map
 
@@ -56,9 +56,20 @@
 - Verify requested writes. If a result is uncertain, inspect current state before retrying and reuse successful creations. Keep source links, parent/sub-issue grouping, and blocking dependencies distinct; verify native relationships when requested.
 - Close issues with a meaningful reason and supporting evidence, such as a fix or canonical duplicate. Creating child issues does not complete their parent.
 
+## Implementing GitHub Issues
+
+- By default, a request such as "implement issue #123" includes implementation, validation, committing, pushing, and opening or updating a regular PR. Follow explicit task-scope overrides.
+- Before editing, resolve the repository from the current clone, read the issue and relevant discussion, identify acceptance criteria, and inspect local/remote branches and related PRs. Confirm existing work belongs to that repository and issue before reusing it.
+- Resume a matching implementation branch/PR without resetting existing work. For new work, fetch the intended base and create `issue/<number>-<short-description>` from current remote `main`, unless an explicit alternative base applies. Preserve unrelated local changes and exclude them from commits; use a separate worktree when necessary to avoid disturbing ongoing work.
+- Implement the agreed scope, add appropriate tests, and review the diff. Run `task verify`, or `task verify:all` (which includes `task verify`) when browser validation is relevant. Record exact commands and outcomes.
+- Fix introduced validation failures. If a required check remains failed or unavailable, report the blocker and incomplete validation instead of claiming completion or automatically substituting a draft PR.
+- After successful implementation and validation, commit and push the issue changes, then create or update a regular PR against the intended base. Complete every heading in `.github/pull_request_template.md`; the PR helper selects the template but does not fill it. Mark a reused draft ready when complete; reserve drafts for explicitly requested publication of unfinished work.
+- Use `Closes #<number>` only when the PR fully resolves the issue; use a related-issue reference for partial work. Verify the published PR's base/head, body, issue reference, and ready-for-review state, then return its URL with a concise implementation and validation summary. Leave merging and issue closure to the established review/merge process.
+
 ## Pull Requests
 
 - Preserve every PR template heading.
+- For noninteractive publication, fill a body file from the repository template and use `mise exec -- gh pr create --body-file <path>` with explicit `--repo`, `--head`, `--base`, and `--title`. Do not pass `--body` or `--body-file` to `task pr:create`: its `--template` flag is incompatible with those flags.
 - Include exact validation commands and outcomes, or state why validation was not run.
 - If using a GitHub connector or web UI instead of `gh`, manually build the PR body from `.github/pull_request_template.md`.
 - Do not rely on `gh pr create --fill` as the final PR body; it can skip the template details reviewers need.
