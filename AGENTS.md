@@ -69,6 +69,7 @@
 ## Pull Requests
 
 - Preserve every PR template heading.
+- For noninteractive publication, fill a body file from the repository template and use `mise exec -- gh pr create --body-file <path>` with explicit `--repo`, `--head`, `--base`, and `--title`. Do not pass `--body` or `--body-file` to `task pr:create`: its `--template` flag is incompatible with those flags.
 - Include exact validation commands and outcomes, or state why validation was not run.
 - If using a GitHub connector or web UI instead of `gh`, manually build the PR body from `.github/pull_request_template.md`.
 - Do not rely on `gh pr create --fill` as the final PR body; it can skip the template details reviewers need.

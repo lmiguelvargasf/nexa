@@ -34,6 +34,13 @@ The preview invokes `gh pr create` with
 `--draft`. The helper does not populate the body; the policy requires the agent
 to do so.
 
+An actual attempt to pass a completed `--body-file` to this helper was rejected
+before PR creation: GitHub CLI does not allow `--template` with `--body` or
+`--body-file`. For noninteractive publication, fill the repository template in a
+body file, then call `mise exec -- gh pr create --body-file <path>` directly with
+explicit repository, head, base, and title arguments. This reuses the same
+template without changing the existing interactive helper.
+
 Inspect the PR template headings:
 
 ```sh
