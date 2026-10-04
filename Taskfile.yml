@@ -138,7 +138,18 @@ tasks:
       - task: check
       - task: typecheck
       - task: test:run
+      - task: skills:test
       - task: build
+
+  skills:test:
+    desc: Test skill update preparation and publication with isolated fixtures
+    cmds:
+      - mise exec -- node --test scripts/skills/*.test.mjs
+
+  skills:check:
+    desc: Prepare and validate skill updates in an isolated checkout without publishing
+    cmds:
+      - mise exec -- bun scripts/skills/update.mjs --check
 
   verify:all:
     desc: Run all validation, including browser E2E tests

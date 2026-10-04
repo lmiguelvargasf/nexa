@@ -32,3 +32,4 @@ name = "Biome check"
 language = "system"
 entry = "mise exec -- bunx biome check --write --no-errors-on-unmatched --files-ignore-unknown=true"
 files = "\\.(astro|css|graphql|html|js|jsx|json|jsonc|mjs|cjs|ts|tsx|mts|cts)$"
+exclude = '^\.agents/(skills/|licenses/)'

@@ -6,6 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
+    "includes": ["**", "!!.agents/skills", "!!.agents/licenses"],
     "ignoreUnknown": true
   },
   "formatter": {

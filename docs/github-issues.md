@@ -18,7 +18,8 @@ The upstream MIT copyright and permission notice is preserved verbatim in
 [`.agents/licenses/github-awesome-copilot-LICENSE`](../.agents/licenses/github-awesome-copilot-LICENSE).
 `prek.toml` excludes vendored skills and licenses from whitespace, line-ending,
 BOM, and final-newline fixers, including this skill and its external license.
-Other checks remain enabled. The reviewed upstream
+Biome also excludes vendored skill and license files to preserve upstream example
+code. Repository-owned files and the other vendor checks remain enabled. The reviewed upstream
 skill contains trailing whitespace, and its license lacks a final newline.
 
 ## Refresh or update only this skill
@@ -88,3 +89,12 @@ The [draft exercises](validation/github-issues.md) cover template selection,
 uncertainty, and preservation of existing content. The implementation PR records
 the temporary-checkout refresh and live read-only clone checks separately from
 those drafts; no throwaway issues are needed.
+
+## Scheduled candidate preparation
+
+The [project skill updater](skill-updates.md) preserves this contract. It reports
+new `github-issues` candidates without installing them until an upstream and
+license review is recorded in `.github/skills-review.json` and merged. The updater
+checks that approved full revision and its hashes before installation, synchronizes
+external attribution, and repeats the file-list, byte, and hash comparisons after
+`task verify` and `task hooks:run`. Candidate detection alone is never approval.
