@@ -1,6 +1,7 @@
 # Briko agent pull requests
 
-Briko publishes coding-agent implementation branches and PRs. The maintainer
+Briko publishes coding-agent implementation branches and PRs through the owner's
+**Brikosi** GitHub App (`brikosi[bot]`). The maintainer
 reviews those PRs using their own GitHub account. App authorship is provenance;
 required CI, current-revision checks, dependency attestations and merge protections
 still apply. Briko does not review, approve or automatically merge changes.
@@ -10,9 +11,16 @@ preserved independently of the PR author.
 
 ## Registration and installation
 
-Register a **private GitHub App** called **Briko** under the repository owner's
-account. App names are globally unique; if unavailable, agree a new registration
-name and record its actual slug and bot ID instead of assuming a spelling.
+For Nexa, the owner registered the **private Brikosi GitHub App**. Its verified
+identity is App ID `5186831`, slug `brikosi`, bot login `brikosi[bot]` and numeric
+bot ID `337737264`. Installation `167846373` selects only `lmiguelvargasf/nexa`.
+The client ID is available in the owner's App settings. These IDs document this
+installation; the reusable publisher reads its protected config and resolves the
+destination from the clone instead of hardcoding them.
+
+For another repository/account, register a private App under its owner. App names
+are globally unique; agree an available registration name and record its actual
+slug and bot ID instead of assuming a spelling.
 
 Repository permissions:
 
@@ -56,6 +64,9 @@ Example folder layout (all paths are local and absolute):
   config.json                    # mode 600
   publish.mjs                    # reviewed standalone publisher, mode 600
 ```
+
+The Nexa owner's local setup uses this `~/.config/briko/` layout. Resolve the home
+directory in the trusted maintainer session and pass absolute paths to the CLI.
 
 `config.json` (replace all example values with verified IDs and paths):
 

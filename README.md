@@ -75,6 +75,6 @@ Weekly skill updates are prepared as one PR for manual review and merging. See
 
 ## Agent Pull Requests
 
-Briko is the dedicated GitHub App identity for coding-agent implementation PRs.
+Briko uses the dedicated Brikosi GitHub App (`brikosi[bot]`) for coding-agent implementation PRs.
 It publishes reviewed commits for the maintainer to review and merge. See
 [protected local setup, publication, and credential lifecycle](docs/agent-publication.md).
