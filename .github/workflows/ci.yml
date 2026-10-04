@@ -19,7 +19,7 @@ env:
 jobs:
   scope:
     name: Validation scope
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       database: ${{ steps.scope.outputs.database }}
@@ -38,7 +38,7 @@ jobs:
           EVENT_JSON: ${{ toJSON(github.event) }}
       - name: Preserve the tested PR identity
         if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: validation-identity
           path: validation-identity.json
@@ -47,7 +47,7 @@ jobs:
 
   verify:
     name: Pre-PR validation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
@@ -78,7 +78,7 @@ jobs:
         run: task dependencies:audit
       - name: Preserve browser failure evidence
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: browser-failures
           path: |
@@ -96,7 +96,7 @@ jobs:
     name: Dependency validation
     needs: [scope, verify, database]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
