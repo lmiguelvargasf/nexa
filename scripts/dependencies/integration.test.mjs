@@ -15,7 +15,11 @@ import test from "node:test";
 import { prepare, publish } from "./review.mjs";
 
 const trusted = new URL("../../.github/dependencies/", import.meta.url);
-function fixture() {
+function fixture({
+  sameResolution = false,
+  transitive = false,
+  tooManyTests = false,
+} = {}) {
   const directory = mkdtempSync(join(tmpdir(), "nexa-dependency-integration-"));
   const git = (...args) =>
     execFileSync("git", args, {
@@ -33,6 +37,23 @@ function fixture() {
   writeFileSync(
     join(directory, "src/usage.ts"),
     "import { clsx } from 'clsx';\nexport const classes = clsx('px-2');\n",
+  );
+  for (const suffix of tooManyTests
+    ? [".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx"]
+    : [".test.ts"])
+    writeFileSync(
+      join(directory, `src/usage${suffix}`),
+      "import { classes } from './usage';\nthrow new Error('TEST_MUST_NOT_EXECUTE');\n",
+    );
+  if (tooManyTests)
+    writeFileSync(
+      join(directory, "src/another.ts"),
+      "import { clsx } from 'clsx';\n",
+    );
+  mkdirSync(join(directory, ".github/workflows"));
+  writeFileSync(
+    join(directory, ".github/workflows/ci.yml"),
+    "name: CI\non: pull_request\njobs:\n  verify:\n    steps:\n      - run: task verify:all\n",
   );
   const packageAt = (version) => ({
     name: "fixture",
@@ -54,7 +75,24 @@ function fixture() {
             devDependencies: {},
           },
         },
-        packages: { clsx: [`clsx@${version}`, "", {}, "sha512-YWJj"] },
+        packages: {
+          clsx: [
+            `clsx@${sameResolution ? "2.1.1" : version}`,
+            "",
+            {},
+            "sha512-YWJj",
+          ],
+          ...(transitive
+            ? {
+                indirect: [
+                  `indirect@${version === "2.1.0" ? "1.0.0" : "1.0.1"}`,
+                  "",
+                  {},
+                  "sha512-YWJj",
+                ],
+              }
+            : {}),
+        },
       }),
     );
   };
@@ -126,8 +164,8 @@ function fixture() {
   };
 }
 
-async function withFixture(t, callback) {
-  const f = fixture();
+async function withFixture(t, callback, options) {
+  const f = fixture(options);
   const cwd = process.cwd();
   const oldOutput = process.env.GITHUB_OUTPUT;
   process.env.GITHUB_OUTPUT = join(f.directory, "output.txt");
@@ -233,7 +271,85 @@ test("prepare uses data-only PR reads, current successful CI and complete eviden
       false,
     );
     assert.ok(calls.every((call) => call.method === "GET"));
+    const evidence = JSON.parse(
+      readFileSync(join(out, "prompt.md"), "utf8").split(
+        "UNTRUSTED EVIDENCE (JSON):\n",
+      )[1],
+    );
+    assert.deepEqual(evidence.ci.testedMerge.parents, [
+      f.identity.baseSha,
+      f.identity.headSha,
+    ]);
+    assert.equal(evidence.ci.testedMerge.sha, f.identity.testedSha);
+    assert.equal(evidence.ci.testedMerge.relationshipValidated, true);
+    assert.match(
+      evidence.ci.trustedBaselineWorkflow.content,
+      /task verify:all/,
+    );
+    assert.equal(evidence.lockfile.directEntries[0].before[0], "clsx@2.1.0");
+    assert.equal(evidence.lockfile.directEntries[0].after[0], "clsx@2.1.1");
+    assert.deepEqual(
+      evidence.lockfile.changedPackages.map(({ name }) => name),
+      ["clsx"],
+    );
+    assert.ok(
+      evidence.usage.some(
+        ({ path, content }) =>
+          path === "src/usage.test.ts" &&
+          content.includes("TEST_MUST_NOT_EXECUTE"),
+      ),
+    );
   }));
+
+test("evidence distinguishes declaration-only updates and includes every transitive change", async (t) => {
+  for (const transitive of [false, true])
+    await withFixture(
+      t,
+      async (f) => {
+        const out = join(f.directory, "prepared");
+        await prepare(out, f.env);
+        const evidence = JSON.parse(
+          readFileSync(join(out, "prompt.md"), "utf8").split(
+            "UNTRUSTED EVIDENCE (JSON):\n",
+          )[1],
+        );
+        assert.deepEqual(
+          evidence.lockfile.directEntries[0].before,
+          evidence.lockfile.directEntries[0].after,
+        );
+        assert.deepEqual(
+          evidence.lockfile.changedPackages.map(({ name }) => name),
+          transitive ? ["indirect"] : [],
+        );
+        if (transitive) {
+          assert.equal(
+            evidence.lockfile.changedPackages[0].before[0],
+            "indirect@1.0.0",
+          );
+          assert.equal(
+            evidence.lockfile.changedPackages[0].after[0],
+            "indirect@1.0.1",
+          );
+        }
+      },
+      { sameResolution: true, transitive },
+    );
+});
+
+test("adjacent tests retain the five-file usage bound without truncation", async (t) =>
+  withFixture(
+    t,
+    async (f) => {
+      const out = join(f.directory, "prepared");
+      await prepare(out, f.env);
+      const report = JSON.parse(readFileSync(join(out, "report.json")));
+      assert.equal(report.status, "NEEDS_HUMAN");
+      assert.equal(report.complete, false);
+      assert.equal(existsSync(join(out, "prompt.md")), false);
+      assert.match(report.reason, /complete application usage unavailable/);
+    },
+    { tooManyTests: true },
+  ));
 
 test("missing setup, duplicate reviews and untrusted labels cannot initiate a paid run", async (t) =>
   withFixture(t, async (f, _calls, setComments) => {

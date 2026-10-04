@@ -26,6 +26,7 @@ import {
   parseLock,
   reviewIdentity,
   SHA,
+  stable,
   usageFromEvents,
   validateReview,
 } from "./policy.mjs";
@@ -253,7 +254,45 @@ export async function prepare(directory, env = process.env) {
     ci: {
       runId,
       conclusion: run.conclusion,
-      checks: jobs.jobs.map(({ name, conclusion }) => ({ name, conclusion })),
+      testedMerge: {
+        sha: commit.sha,
+        parents: commit.parents.map(({ sha }) => sha),
+        relationshipValidated: true,
+      },
+      checks: jobs.jobs.map(({ name, conclusion, steps = [] }) => ({
+        name,
+        conclusion,
+        steps: steps.map(({ name, conclusion }) => ({ name, conclusion })),
+      })),
+      trustedBaselineWorkflow: {
+        path: ".github/workflows/ci.yml",
+        revision: git("rev-parse", "HEAD"),
+        content: readFileSync(".github/workflows/ci.yml", "utf8"),
+      },
+    },
+    lockfile: {
+      directEntries: declaredChanges.map(({ name }) => ({
+        name,
+        before: oldLock.packages[name],
+        after: newLock.packages[name],
+      })),
+      changedPackages: [
+        ...new Set([
+          ...Object.keys(oldLock.packages),
+          ...Object.keys(newLock.packages),
+        ]),
+      ]
+        .sort()
+        .filter(
+          (name) =>
+            JSON.stringify(stable(oldLock.packages[name])) !==
+            JSON.stringify(stable(newLock.packages[name])),
+        )
+        .map((name) => ({
+          name,
+          before: oldLock.packages[name] ?? null,
+          after: newLock.packages[name] ?? null,
+        })),
     },
     diff: git(
       "diff",
@@ -267,6 +306,18 @@ export async function prepare(directory, env = process.env) {
     releases: [],
     missing: [],
   };
+  const sourcePaths = new Set(
+    git(
+      "ls-tree",
+      "-r",
+      "--name-only",
+      identity.headSha,
+      "--",
+      "src",
+      "emails",
+      "e2e",
+    ).split("\n"),
+  );
   for (const change of changes) {
     try {
       const names = execFileSync(
@@ -286,10 +337,18 @@ export async function prepare(directory, env = process.env) {
       )
         .trim()
         .split("\n");
-      if (names.length > 5)
+      const paths = new Set(names.map((name) => name.slice(41)));
+      // Include adjacent assertions as data; never execute dependency PR tests
+      // on this credential-bearing follow-up runner.
+      for (const path of [...paths]) {
+        const stem = path.replace(/\.[jt]sx?$/, "");
+        for (const suffix of [".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx"])
+          if (sourcePaths.has(`${stem}${suffix}`))
+            paths.add(`${stem}${suffix}`);
+      }
+      if (paths.size > 5)
         throw new Error("Application usage spans more than five files");
-      for (const name of names) {
-        const path = name.slice(41);
+      for (const path of paths) {
         if (!evidence.usage.some((entry) => entry.path === path))
           evidence.usage.push({ path, content: show(identity.headSha, path) });
       }
