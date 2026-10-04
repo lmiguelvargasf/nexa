@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "skills": {
+    "github-issues": {
+      "source": "github/awesome-copilot",
+      "skillPath": "skills/github-issues/SKILL.md",
+      "ref": "7568a482ce2df38f8965ab5336a3220db796a4ba",
+      "computedHash": "3eb6f99553920d6d94e47cb9e31432b10e2a6a235d9fc972165ec824a71ba0e9",
+      "licenseHash": "273cc328ac6e4e72ea023e691d34010fb40da5e8a60ed4f6c5d50882e75e57d1"
+    }
+  }
+}

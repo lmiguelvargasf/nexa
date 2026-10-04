@@ -58,3 +58,8 @@ This project uses [Task](https://taskfile.dev) for local commands. Run `task` to
 
 Agents use the project-scoped `github-issues` skill with this repository's issue
 policy and templates. See [skill provenance and updates](docs/github-issues.md).
+
+## Project Skill Updates
+
+Weekly skill updates are prepared as one PR for manual review and merging. See
+[setup, candidate review, and manual runs](docs/skill-updates.md).
