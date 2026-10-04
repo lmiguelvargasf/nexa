@@ -19,6 +19,7 @@ function fixture({
   sameResolution = false,
   transitive = false,
   tooManyTests = false,
+  manager = "bun",
 } = {}) {
   const directory = mkdtempSync(join(tmpdir(), "nexa-dependency-integration-"));
   const git = (...args) =>
@@ -62,7 +63,7 @@ function fixture({
     scripts: { postinstall: "touch INSTALL_HOOK_MUST_NOT_RUN" },
   });
   const write = (version) => {
-    const manifest = packageAt(version);
+    const manifest = packageAt(manager === "bun" ? version : "2.1.0");
     writeFileSync(join(directory, "package.json"), JSON.stringify(manifest));
     writeFileSync(
       join(directory, "bun.lock"),
@@ -77,7 +78,7 @@ function fixture({
         },
         packages: {
           clsx: [
-            `clsx@${sameResolution ? "2.1.1" : version}`,
+            `clsx@${manager !== "bun" ? "2.1.0" : sameResolution ? "2.1.1" : version}`,
             "",
             {},
             "sha512-YWJj",
@@ -96,11 +97,29 @@ function fixture({
       }),
     );
   };
-  write("2.1.0");
+  const writeDependency = (version) => {
+    write(version);
+    if (manager === "mise") {
+      writeFileSync(
+        join(directory, "mise.toml"),
+        `[tools]\ngh = "${version}"\n`,
+      );
+      writeFileSync(
+        join(directory, "mise.lock"),
+        `[[tools.gh]]\nversion = "${version}"\nbackend = "aqua:cli/cli"\n[tools.gh."platforms.linux-x64"]\nchecksum = "sha256:${"a".repeat(64)}"\nurl = "https://github.com/cli/cli/releases/download/v${version}/gh_${version}_linux_amd64.tar.gz"\n`,
+      );
+    }
+    if (manager === "github-actions")
+      writeFileSync(
+        join(directory, ".github/workflows/ci.yml"),
+        `name: CI\non: pull_request\njobs:\n  verify:\n    steps:\n      - uses: actions/checkout@v${version}\n      - run: task verify:all\n`,
+      );
+  };
+  writeDependency("2.1.0");
   git("add", ".");
   git("commit", "--quiet", "-m", "base");
   const base = git("rev-parse", "HEAD");
-  write("2.1.1");
+  writeDependency("2.1.1");
   git("add", ".");
   git("commit", "--quiet", "-m", "helper update");
   const head = git("rev-parse", "HEAD");
@@ -157,6 +176,13 @@ function fixture({
   };
   return {
     directory,
+    manager,
+    paths:
+      manager === "mise"
+        ? ["mise.toml", "mise.lock"]
+        : manager === "github-actions"
+          ? [".github/workflows/ci.yml"]
+          : ["package.json", "bun.lock"],
     env,
     identity,
     pr,
@@ -212,7 +238,7 @@ async function withFixture(t, callback, options) {
     else if (path.endsWith("/actions/artifacts/99/zip"))
       return new Response(readFileSync(join(f.directory, "identity.zip")));
     else if (path.endsWith("/pulls/7/files"))
-      value = ["package.json", "bun.lock"].map((filename) => ({
+      value = f.paths.map((filename) => ({
         filename,
         status: "modified",
       }));
@@ -227,7 +253,14 @@ async function withFixture(t, callback, options) {
           },
         ];
       } else value = comments;
-    } else if (path.endsWith("/clsx/2.1.1"))
+    } else if (
+      path.endsWith("/commits/v2.1.0") ||
+      path.endsWith("/commits/v2.1.1")
+    )
+      value = {
+        sha: path.endsWith("v2.1.0") ? "a".repeat(40) : "b".repeat(40),
+      };
+    else if (path.endsWith("/clsx/2.1.1"))
       value = {
         name: "clsx",
         version: "2.1.1",
@@ -336,17 +369,31 @@ test("evidence distinguishes declaration-only updates and includes every transit
     );
 });
 
-test("adjacent tests retain the five-file usage bound without truncation", async (t) =>
+test("complete consumers and adjacent tests are bounded by bytes rather than a five-file cap", async (t) =>
   withFixture(
     t,
     async (f) => {
       const out = join(f.directory, "prepared");
       await prepare(out, f.env);
-      const report = JSON.parse(readFileSync(join(out, "report.json")));
+      let report = JSON.parse(readFileSync(join(out, "report.json")));
+      assert.equal(report.status, "PENDING");
+      const evidence = JSON.parse(
+        readFileSync(join(out, "prompt.md"), "utf8").split(
+          "UNTRUSTED EVIDENCE (JSON):\n",
+        )[1],
+      );
+      assert.ok(evidence.usage.length > 5);
+      const policyPath = join(f.directory, ".github/dependencies/policy.json");
+      const policy = JSON.parse(readFileSync(policyPath));
+      policy.maxContextBytes = 100;
+      writeFileSync(policyPath, JSON.stringify(policy));
+      const bounded = join(f.directory, "bounded");
+      await prepare(bounded, f.env);
+      report = JSON.parse(readFileSync(join(bounded, "report.json")));
       assert.equal(report.status, "NEEDS_HUMAN");
       assert.equal(report.complete, false);
-      assert.equal(existsSync(join(out, "prompt.md")), false);
-      assert.match(report.reason, /complete application usage unavailable/);
+      assert.equal(existsSync(join(bounded, "prompt.md")), false);
+      assert.match(report.reason, /context byte limit/);
     },
     { tooManyTests: true },
   ));
@@ -409,3 +456,31 @@ test("preparation supports both policy modes and rejects inconsistent activation
       await assert.rejects(prepare(out, f.env), /Unexpected review policy/);
     }
   }));
+
+for (const manager of ["mise", "github-actions"])
+  test(`${manager} updates reach complete data-only Sol preparation`, async (t) =>
+    withFixture(
+      t,
+      async (f) => {
+        const out = join(f.directory, "prepared");
+        await prepare(out, f.env);
+        const report = JSON.parse(readFileSync(join(out, "report.json")));
+        assert.equal(report.status, "PENDING", report.reason);
+        assert.equal(report.complete, true);
+        assert.equal(report.eligibility.candidate, true);
+        const evidence = JSON.parse(
+          readFileSync(join(out, "prompt.md"), "utf8").split(
+            "UNTRUSTED EVIDENCE (JSON):\n",
+          )[1],
+        );
+        assert.equal(evidence.changes[0].manager, manager);
+        assert.equal(evidence.releases[0].baseCommit, "a".repeat(40));
+        assert.equal(evidence.releases[0].headCommit, "b".repeat(40));
+        assert.ok(evidence.usage.length);
+        assert.equal(
+          existsSync(join(f.directory, "INSTALL_HOOK_MUST_NOT_RUN")),
+          false,
+        );
+      },
+      { manager },
+    ));

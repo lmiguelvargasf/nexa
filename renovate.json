@@ -15,21 +15,20 @@
   "automerge": false,
   "platformAutomerge": true,
   "dependencyDashboard": true,
-  "lockFileMaintenance": { "enabled": true },
+  "lockFileMaintenance": {
+    "enabled": true
+  },
   "vulnerabilityAlerts": {
     "enabled": true,
-    "automerge": false,
     "minimumReleaseAge": "0 days",
     "schedule": ["at any time"]
   },
   "packageRules": [
     {
-      "matchDepNames": ["clsx", "tailwind-merge"],
       "matchUpdateTypes": ["patch", "minor"],
-      "matchCurrentVersion": "!/^0/",
-      "groupName": "stable helpers",
       "automerge": true,
-      "automergeType": "pr"
+      "automergeType": "pr",
+      "description": "Automatically merge any minor/patch update after current CI and trusted Sol PASS"
     },
     {
       "matchDepNames": [
@@ -63,6 +62,12 @@
     {
       "matchManagers": ["github-actions"],
       "pinDigests": true
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["pin", "pinDigest", "digest"],
+      "automerge": true,
+      "automergeType": "pr"
     }
   ]
 }

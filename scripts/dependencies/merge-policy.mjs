@@ -16,12 +16,12 @@ import {
 } from "./github.mjs";
 import {
   assertIdentity,
-  helperEligibility,
-  parseLock,
   reviewIdentity,
   SHA,
   validateReview,
 } from "./policy.mjs";
+
+import { inspectUpdates, readUpdates } from "./updates.mjs";
 
 const ROOT = ".github/dependencies";
 const WORKFLOW = ".github/workflows/dependency-merge-policy.yml";
@@ -273,21 +273,7 @@ export async function evaluate(
     identity.headSha,
     identity.baseSha,
   );
-  const show = (sha, path) => git("show", `${sha}:${path}`);
-  const eligibility = helperEligibility(
-    {
-      paths: git(
-        "diff",
-        "--name-only",
-        `${identity.baseSha}...${identity.headSha}`,
-      ).split("\n"),
-      before: JSON.parse(show(identity.baseSha, "package.json")),
-      after: JSON.parse(show(identity.headSha, "package.json")),
-      oldLock: parseLock(show(identity.baseSha, "bun.lock")),
-      newLock: parseLock(show(identity.headSha, "bun.lock")),
-    },
-    policy.helperAllowlist,
-  );
+  const eligibility = inspectUpdates(readUpdates(identity));
   if (!eligibility.candidate) throw new Error(eligibility.reasons.join(" "));
   const reviews = await runs(client, "dependency-review.yml", branch);
   const reviewRun = reviews.find(
@@ -334,7 +320,7 @@ export async function evaluate(
       "report.json",
     );
     assertReport(report, entry, identity, policy, key, JSON.parse(schemaText));
-    return `Eligible helper minor/patch update; current CI ${ci.id} and Sol PASS ${entry.id}`;
+    return `Eligible dependency minor/patch or pin update; current CI ${ci.id} and Sol PASS ${entry.id}`;
   }
   throw new Error(
     reviewRun

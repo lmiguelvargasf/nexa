@@ -15,13 +15,13 @@ import {
   readJson,
   releaseEvidence,
   repositoryName,
+  upstreamEvidence,
   validationIdentity,
 } from "./github.mjs";
 import {
   assertIdentity,
   dependencyChanges,
   estimateCost,
-  helperEligibility,
   lockedChanges,
   parseLock,
   reviewIdentity,
@@ -30,6 +30,8 @@ import {
   usageFromEvents,
   validateReview,
 } from "./policy.mjs";
+
+import { inspectUpdates, readUpdates } from "./updates.mjs";
 
 const ROOT = ".github/dependencies";
 const git = (...args) =>
@@ -53,7 +55,7 @@ export function summary(report) {
     `Result: **${report.status}**. ${safeText(report.reason ?? result?.summary ?? "")}`,
     `Model: \`${policy.model}\`; effort: \`${policy.effort}\`; processing: standard.`,
     `Reviewed head: \`${identity.headSha}\`; base: \`${identity.baseSha}\`; tested merge: \`${identity.testedSha}\`.`,
-    `Helper policy candidate: **${report.eligibility?.candidate ? "yes" : "no"}**.`,
+    `Automatic merge candidate: **${report.eligibility?.candidate ? "yes" : "no"}**.`,
     ...(report.eligibility?.reasons ?? []).map(
       (reason) => `- ${safeText(reason)}`,
     ),
@@ -70,7 +72,7 @@ export function summary(report) {
       ? `Tokens: input ${usage.input}, cached ${usage.cachedInput}, output ${usage.output} (includes ${usage.reasoning} reasoning). Estimated token cost: $${cost.toFixed(4)}.`
       : "Token usage/cost unavailable; check the dedicated API project's usage. A failure may still have incurred cost.",
     policy.automaticMerging
-      ? "CI remains required. Only the trusted merge policy can authorize an eligible helper update."
+      ? "CI remains required. Only the trusted merge policy can authorize an eligible dependency update."
       : "CI remains required. Review this update manually; AI output never authorizes a merge during the pilot.",
   ].join("\n\n");
 }
@@ -218,32 +220,41 @@ export async function prepare(directory, env = process.env) {
     identity.baseSha,
   );
   const show = (sha, path) => git("show", `${sha}:${path}`);
-  const before = JSON.parse(show(identity.baseSha, "package.json"));
-  const after = JSON.parse(show(identity.headSha, "package.json"));
+  const snapshot = readUpdates(identity);
+  const before = JSON.parse(
+    snapshot.before["package.json"] ?? show(identity.baseSha, "package.json"),
+  );
+  const after = JSON.parse(
+    snapshot.after["package.json"] ?? show(identity.headSha, "package.json"),
+  );
+  const oldLock = parseLock(
+    snapshot.before["bun.lock"] ?? show(identity.baseSha, "bun.lock"),
+  );
+  const newLock = parseLock(
+    snapshot.after["bun.lock"] ?? show(identity.headSha, "bun.lock"),
+  );
   const declaredChanges = dependencyChanges(before, after);
-  const oldLock = parseLock(show(identity.baseSha, "bun.lock"));
-  const newLock = parseLock(show(identity.headSha, "bun.lock"));
+  report.eligibility = inspectUpdates(snapshot);
   let changes;
   try {
-    changes = lockedChanges(declaredChanges, oldLock, newLock);
+    changes = report.eligibility.changes.map((change) =>
+      change.manager === "bun"
+        ? { ...lockedChanges([change], oldLock, newLock)[0], manager: "bun" }
+        : change,
+    );
   } catch (error) {
     report.reason = `${error.message}; human review required without a paid run.`;
     save(directory, "report.json", report);
     return;
   }
-  report.eligibility = helperEligibility(
-    {
-      paths: files.map((file) => file.filename),
-      before,
-      after,
-      oldLock,
-      newLock,
-    },
-    policy.helperAllowlist,
-  );
-  if (!changes.length || changes.length > policy.maxChangedPackages) {
+  if (
+    !report.eligibility.candidate ||
+    !changes.length ||
+    changes.length > policy.maxChangedPackages
+  ) {
     report.reason =
-      "No focused application-package update, or too many changed packages; review manually without a paid run.";
+      report.eligibility.reasons.join(" ") ||
+      "Too many changed dependencies; review manually without a paid run.";
     save(directory, "report.json", report);
     return;
   }
@@ -273,8 +284,16 @@ export async function prepare(directory, env = process.env) {
     lockfile: {
       directEntries: declaredChanges.map(({ name }) => ({
         name,
-        before: oldLock.packages[name],
-        after: newLock.packages[name],
+        before:
+          oldLock.packages[name] ??
+          Object.entries(oldLock.packages).filter(([, entry]) =>
+            entry[0]?.startsWith(`${name}@`),
+          ),
+        after:
+          newLock.packages[name] ??
+          Object.entries(newLock.packages).filter(([, entry]) =>
+            entry[0]?.startsWith(`${name}@`),
+          ),
       })),
       changedPackages: [
         ...new Set([
@@ -320,47 +339,73 @@ export async function prepare(directory, env = process.env) {
   );
   for (const change of changes) {
     try {
-      const names = execFileSync(
-        "git",
-        [
-          "grep",
-          "-l",
-          "-F",
-          change.name,
+      // Tooling/config consumers are usage too; an application import is not
+      // required for a compiler, linter, runtime, CLI or workflow Action.
+      const names =
+        change.manager === "mise"
+          ? ""
+          : git(
+              "grep",
+              "-l",
+              "-F",
+              change.name,
+              identity.headSha,
+              "--",
+              "src",
+              "emails",
+              "e2e",
+              "Taskfile.yml",
+              "package.json",
+              "*.config.*",
+              ".github/workflows",
+            );
+      const paths = new Set(
+        names
+          .split("\n")
+          .filter(Boolean)
+          .map((name) => name.slice(41)),
+      );
+      if (change.manager === "mise") {
+        for (const path of git(
+          "ls-tree",
+          "-r",
+          "--name-only",
           identity.headSha,
           "--",
-          "src",
-          "emails",
-          "e2e",
-        ],
-        { encoding: "utf8", maxBuffer: 8192 },
-      )
-        .trim()
-        .split("\n");
-      const paths = new Set(names.map((name) => name.slice(41)));
-      // Include adjacent assertions as data; never execute dependency PR tests
-      // on this credential-bearing follow-up runner.
+          "Taskfile.yml",
+          "package.json",
+          ".github/workflows",
+        )
+          .split("\n")
+          .filter(Boolean))
+          paths.add(path);
+      }
+      if (change.manager === "mise") paths.add("mise.toml");
+      if (change.manager === "github-actions") paths.add(change.path);
       for (const path of [...paths]) {
         const stem = path.replace(/\.[jt]sx?$/, "");
         for (const suffix of [".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx"])
           if (sourcePaths.has(`${stem}${suffix}`))
             paths.add(`${stem}${suffix}`);
       }
-      if (paths.size > 5)
-        throw new Error("Application usage spans more than five files");
+      // The full manifest and changed workflows already appear in the diff.
+      // Supply focused consumers first, retaining the same bounded budget.
       for (const path of paths) {
         if (!evidence.usage.some((entry) => entry.path === path))
           evidence.usage.push({ path, content: show(identity.headSha, path) });
       }
+      if (!paths.size) throw new Error("No dependency consumers found");
     } catch {
       evidence.missing.push(
-        `${change.name}: complete application usage unavailable.`,
+        `${change.name}: complete dependency usage unavailable.`,
       );
     }
     try {
       evidence.releases.push(
-        await releaseEvidence(change, policy.maxReleaseBytes, (upstream) =>
-          githubClient(upstream, env.GH_TOKEN),
+        await (change.manager === "bun" ? releaseEvidence : upstreamEvidence)(
+          change,
+          policy.maxReleaseBytes,
+          (upstream) => githubClient(upstream, env.GH_TOKEN),
         ),
       );
     } catch (error) {

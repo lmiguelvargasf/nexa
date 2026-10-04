@@ -1,14 +1,17 @@
 {
-  "version": 2,
+  "version": 3,
   "mode": "automatic",
   "automaticMerging": true,
   "model": "gpt-6.1-sol",
   "effort": "medium",
   "serviceTier": "default",
-  "helperAllowlist": ["clsx", "tailwind-merge"],
   "maxContextBytes": 65536,
   "maxResultBytes": 8192,
   "maxChangedPackages": 5,
   "maxReleaseBytes": 12000,
-  "pricesPerMillionTokens": { "input": 2, "cachedInput": 0.1, "output": 10 }
+  "pricesPerMillionTokens": {
+    "input": 2,
+    "cachedInput": 0.1,
+    "output": 10
+  }
 }

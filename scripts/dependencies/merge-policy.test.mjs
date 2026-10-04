@@ -24,7 +24,11 @@ const policyRoot = new URL("../../.github/dependencies/", import.meta.url);
 const repository = "owner/template";
 const workflow = ".github/workflows/dependency-merge-policy.yml";
 
-function fixture(automatic = false, mutate = () => {}) {
+function fixture(
+  automatic = false,
+  mutate = () => {},
+  { name = "clsx", manager = "bun" } = {},
+) {
   const directory = mkdtempSync(join(tmpdir(), "nexa-merge-gate-"));
   const git = (...args) =>
     execFileSync("git", args, {
@@ -52,7 +56,7 @@ function fixture(automatic = false, mutate = () => {}) {
   const write = (version) => {
     const manifest = {
       name: "fixture",
-      dependencies: { clsx: `^${version}` },
+      dependencies: { [name]: `^${manager === "bun" ? version : "2.1.0"}` },
       devDependencies: {},
       scripts: { postinstall: "touch MUST_NOT_EXECUTE" },
     };
@@ -65,8 +69,32 @@ function fixture(automatic = false, mutate = () => {}) {
           devDependencies: {},
         },
       },
-      packages: { clsx: [`clsx@${version}`, "", {}, "sha512-YWJj"] },
+      packages: {
+        [name]: [
+          `${name}@${manager === "bun" ? version : "2.1.0"}`,
+          "",
+          {},
+          "sha512-YWJj",
+        ],
+      },
     };
+    if (manager === "mise") {
+      writeFileSync(
+        join(directory, "mise.toml"),
+        `[tools]\ngh = "${version}"\n`,
+      );
+      writeFileSync(
+        join(directory, "mise.lock"),
+        `[[tools.gh]]\nversion = "${version}"\nbackend = "aqua:cli/cli"\n[tools.gh."platforms.linux-x64"]\nchecksum = "sha256:${"a".repeat(64)}"\nurl = "https://github.com/cli/cli/releases/download/v${version}/gh_${version}_linux_amd64.tar.gz"\n`,
+      );
+    }
+    if (manager === "github-actions") {
+      mkdirSync(join(directory, ".github/workflows"), { recursive: true });
+      writeFileSync(
+        join(directory, ".github/workflows/ci.yml"),
+        `jobs:\n  verify:\n    steps:\n      - uses: actions/checkout@v${version}\n      - run: task verify\n`,
+      );
+    }
     if (version !== "2.1.0") mutate(manifest, lock, directory);
     writeFileSync(join(directory, "package.json"), JSON.stringify(manifest));
     writeFileSync(join(directory, "bun.lock"), JSON.stringify(lock));
@@ -212,8 +240,8 @@ function fixture(automatic = false, mutate = () => {}) {
   };
 }
 
-async function withFixture(t, automatic, callback, mutate) {
-  const f = fixture(automatic, mutate);
+async function withFixture(t, automatic, callback, mutate, options) {
+  const f = fixture(automatic, mutate, options);
   const cwd = process.cwd();
   const archive = (filename, value) => {
     writeFileSync(join(f.directory, filename), JSON.stringify(value));
@@ -317,11 +345,14 @@ async function withFixture(t, automatic, callback, mutate) {
   }
 }
 
-test("automatic mode requires independently verified helper changes, current CI and trusted PASS", async (t) =>
+test("automatic mode requires independently verified dependency changes, current CI and trusted PASS", async (t) =>
   withFixture(t, true, async (f, run) => {
     const status = await run();
     assert.equal(status.state, "success");
-    assert.match(status.description, /Eligible helper minor\/patch update/);
+    assert.match(
+      status.description,
+      /Eligible dependency minor\/patch or pin update/,
+    );
     assert.equal(status.context, "Dependency merge policy");
     assert.equal(existsSync(join(f.directory, "MUST_NOT_EXECUTE")), false);
     assert.ok(
@@ -331,7 +362,7 @@ test("automatic mode requires independently verified helper changes, current CI 
     );
   }));
 
-test("helper minor updates still require current complete trusted PASS and successful CI", async (t) =>
+test("dependency minor updates still require current complete trusted PASS and successful CI", async (t) =>
   withFixture(
     t,
     true,
@@ -465,12 +496,12 @@ test("unrelated source files cannot qualify even with an AI PASS", async (t) =>
     },
   ));
 
-test("transitive changes cannot qualify even with an AI PASS", async (t) =>
+test("transitive changes can qualify with current complete trusted AI PASS", async (t) =>
   withFixture(
     t,
     true,
     async (_f, run) => {
-      assert.equal((await run()).state, "failure");
+      assert.equal((await run()).state, "success");
     },
     (_manifest, lock) => {
       lock.packages.transitive = ["transitive@1.0.1", "", {}, "sha512-YWJj"];
@@ -591,7 +622,7 @@ test("a persisted human attestation is usable only from the trusted current defa
     assert.equal((await run()).state, "failure");
   }));
 
-test("labels and AI PASS cannot qualify protected or transitive grouped updates", async (t) =>
+test("labels and AI PASS cannot qualify added dependencies in grouped updates", async (t) =>
   withFixture(
     t,
     true,
@@ -644,3 +675,26 @@ test("report validation and human authorization reject malformed identities", as
     /PASS/,
   );
 });
+
+for (const options of [
+  { name: "zod" },
+  { manager: "mise" },
+  { manager: "github-actions" },
+])
+  test(`${options.name ?? options.manager} automatic approval requires fresh trusted CI and Sol PASS`, async (t) =>
+    withFixture(
+      t,
+      true,
+      async (f, run) => {
+        assert.equal((await run()).state, "success");
+        for (const status of ["BLOCK", "NEEDS_HUMAN", "ERROR"]) {
+          f.report.status = status;
+          assert.equal((await run()).state, "failure");
+        }
+        f.report.status = "PASS";
+        f.ciRuns[0].conclusion = "cancelled";
+        assert.equal((await run()).state, "failure");
+      },
+      undefined,
+      options,
+    ));
