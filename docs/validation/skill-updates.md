@@ -3,7 +3,7 @@
 ## Isolated fixture coverage
 
 `mise exec -- task skills:test` runs Node's test runner against
-`scripts/skills/*.test.mjs`: **37 tests passed**. Preparation tests use local source
+`scripts/skills/*.test.mjs`: **38 tests passed**. Preparation tests use local source
 fixtures and injected installers. Publication tests use real local Git repositories
 and bare remotes with mocked GitHub responses; they do not create live PRs.
 
@@ -27,6 +27,9 @@ Covered behavior includes:
 - The runner uses a separate checkout and empty preparation directory, validates
   before publication, blocks unexpected untracked skills, preserves template
   headings, and never publishes local checks or failed/no-change preparations.
+- The actual Biome executable ignores vendored upstream examples, including
+  explicit mutating CLI targets, while continuing to reject and fix formatting in
+  repository-owned source. Vendor bytes remain unchanged throughout the fixture.
 
 These fixtures establish local control flow and Git lease behavior. Mocked GitHub
 responses do not establish live token permissions, event delivery, API concurrency,
@@ -55,14 +58,15 @@ name and source folder (`skills/react-best-practices`). It also confirmed that t
 pinned CLI omits bundled `metadata.json` while counting it in the lock hash; the
 updater restores known omitted files from the fetched source before comparison.
 
-The live source audit found a real blocker at
+The initial live source audit found a blocker at
 `vercel/nextjs-skills@c522619e45aa3492fd2bfc916b308b275eff7798`: the repository
 retired `skills/next-best-practices/SKILL.md` and now directs users to bundled Next.js
-docs. The actual preparation fails with the source, full revision, and missing path,
-asking maintainers to review the retirement before changing the manifest. No skill
-was removed or substituted. A complete live all-skill update cannot succeed until
-that separate maintenance decision is resolved; this failure is not reported as
-a successful update.
+docs. Preparation failed with the source, full revision, and missing path,
+asking maintainers to review the retirement before changing the manifest.
+Issue #21 was subsequently resolved by merged PR #22, which removed the retired
+directory and lock entry together. This implementation branch was rebased onto
+that merge (`498395fd412eaf8ff4fed1f8a5b781cf0e2a29a5`); its manifest now tracks
+16 skills. The initial failure below records historical failed-source handling.
 
 The full default runner was exercised from a clean committed checkout with
 `mise exec -- task skills:check`. It reached this same retired source and exited
@@ -80,10 +84,14 @@ application unit tests, updater fixtures, and the production build.
 
 The first all-files hook run exposed pre-existing whitespace/newline changes in
 vendored skills and a license. Those modifications were restored byte-for-byte.
-The four mutating file-hygiene hooks now exclude all vendored skill and attribution
-files, extending the existing github-issues exception. Syntax, secret, and other
-checks remain enabled. No installed skill, license, or current lock entry is changed
-by this implementation PR.
+The four mutating file-hygiene hooks exclude all vendored skill and attribution
+files, extending the existing github-issues exception. After retirement, a combined
+live proposal exposed an additional formatting conflict in the newly downloaded
+Resend `references/fetch-all-templates.mjs` example. Biome now force-ignores vendor
+skill/license directories, and its mutating hook excludes them too. Repository-owned
+code remains checked, and vendor syntax/secret checks remain enabled. No installed
+skill, license, or current lock entry is changed by this implementation PR relative
+to the updated base.
 
 After the passing hook run, `diff -qr` against the independently fetched pinned
 github-issues snapshot and `cmp` for the external license both passed. The exported

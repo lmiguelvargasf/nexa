@@ -135,11 +135,13 @@ any failed source/validation check blocks publication. `task verify` includes
 fixture tests for the updater itself. Tests cannot determine whether new skill
 instructions are appropriate: source and license review remains required.
 
-The four whitespace/BOM/line-ending/final-newline fixers in `prek.toml` exclude
+Biome and the four whitespace/BOM/line-ending/final-newline fixers exclude
 vendored `.agents/skills/` and `.agents/licenses/` files so they preserve upstream
-bytes. All other hooks remain enabled. This extends the existing github-issues
-exception to the other vendored sources; it does not exempt repository-owned code
-or guidance from formatting checks.
+bytes. The Biome configuration force-ignores these directories, and its mutating
+hook excludes them too. Repository-owned code, configuration, and guidance remain
+subject to the normal checks. The other vendor hooks, including syntax and secret
+checks, remain enabled. Upstream file-list, byte, hash, and attribution verification
+validate the vendor copies after hooks.
 
 These checks run inside the update job **before** it creates or refreshes the PR.
 GitHub suppresses workflows triggered by token-authenticated pushes. Its current
