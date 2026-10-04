@@ -77,6 +77,11 @@ The supplied repository initially had a disabled ruleset and no active branch
 protection. Workflow YAML does not enable these settings by itself. Verify them
 in the destination repository. For `lmiguelvargasf/nexa`, ruleset [17001152](https://github.com/lmiguelvargasf/nexa/rules/17001152) was activated on October 3 after [PR #25 CI](https://github.com/lmiguelvargasf/nexa/actions/runs/37169889584) passed. It preserves the previous PR/deletion/force-push rules, requires **Dependency validation** specifically from GitHub Actions (integration 15368), enforces an up-to-date base, and has no bypass actors. Repository automatic merging remains disabled. These settings are repository-specific and do not transfer with the template.
 
+The same ruleset now also requires **Dependency merge policy** from GitHub Actions.
+The owner-authorized human path passed for #34, #35, and #36 before merging their
+fixes. These approvals retained current CI and exact reviewed head/base identities;
+both required statuses were verified green. Repository auto-merge remains off.
+
 The advisory **Dependency review** workflow must
 not be a required check: missing funding or AI `NEEDS_HUMAN` must not prevent a
 maintainer from completing an otherwise validated PR.
@@ -169,11 +174,21 @@ saved. A fixed pilot count is an operational milestone, not a safety certificati
 | Evidence | Current status |
 | --- | --- |
 | Local configuration validation/extraction and isolated failure-path fixtures | Recorded in the implementation PR |
-| Hosted Renovate installation and a reproducible Bun/mise update | Nexa-only installation 167693154 verified; dashboard #28 exists; reproducible update PR pending |
-| Funded project, API secret and enforced spending cap | Secret, review-enable variable, $5 prepaid balance, auto-reload off, and enforced $5 project cap verified October 3; no paid pilot review run |
+| Hosted Renovate installation and a reproducible Bun/mise update | Nexa-only installation 167693154 and dashboard #28 verified; #31/#32 update Bun declarations consistently and pass frozen CI, but retain existing resolved versions; fresh resolution and hosted mise synchronization remain to be demonstrated |
+| Funded project, API secret and enforced spending cap | Secret, review-enable variable, $5 prepaid balance, auto-reload off, and enforced $5 project cap verified October 3; real Sol calls and numeric usage now recorded in #16 |
 | Active required-check rules in the destination repository | Verified for Nexa ruleset 17001152; reconfigure for copied repositories |
-| Real PR outcomes and measured Sol costs | Pending pilot |
+| Real PR outcomes and measured Sol costs | First two reviews returned schema-valid NEEDS_HUMAN at estimated $0.027454 and $0.027900; evidence gaps corrected in #36; assessment and subsequent results are recorded in #16 |
 | Maintainer's automatic-merge activation decision | Pending; automatic merging disabled |
+
+The first paid reviews validated the plumbing and cost reporting, but incorrectly
+questioned different head/test-merge SHAs because their input omitted the validated
+parent relationship. The updated bundle includes that proof, exact locked entries,
+exhaustive resolved-package changes, CI steps/baseline workflow, and adjacent test
+source within the existing byte/file bounds. Compatibility and merge eligibility
+are assessed separately; an advisory PASS cannot override a human-review policy.
+Use the [issue #16 discussion](https://github.com/lmiguelvargasf/nexa/issues/16#issuecomment-5976211780)
+for the dated pilot record and latest results. These declaration-only samples do
+not establish compatibility of a newly resolved upgrade or justify activation.
 
 ### Trusted merge policy and human completion
 
