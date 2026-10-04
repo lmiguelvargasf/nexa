@@ -95,6 +95,11 @@ function fixture(
         `jobs:\n  verify:\n    steps:\n      - uses: actions/checkout@v${version}\n      - run: task verify\n`,
       );
     }
+    if (manager === "none")
+      writeFileSync(
+        join(directory, "README.md"),
+        `Application docs ${version}\n`,
+      );
     if (version !== "2.1.0") mutate(manifest, lock, directory);
     writeFileSync(join(directory, "package.json"), JSON.stringify(manifest));
     writeFileSync(join(directory, "bun.lock"), JSON.stringify(lock));
@@ -226,11 +231,9 @@ function fixture(
         conclusion: "success",
       },
     ],
-    jobs: [
-      "Validation scope",
-      "Pre-PR validation",
-      "Dependency validation",
-    ].map((name) => ({ name, status: "completed", conclusion: "success" })),
+    jobs: ["Validation scope", "Pre-PR validation", "CI validation"].map(
+      (name) => ({ name, status: "completed", conclusion: "success" }),
+    ),
     approvals: [],
     permission: "admin",
     statuses: [],
@@ -621,7 +624,7 @@ test("changed revisions and publication races never authorize approval", async (
     for (const key of ["head", "base"]) {
       const sha = f.pr[key].sha;
       f.pr[key].sha = "f".repeat(40);
-      assert.equal((await run()).state, key === "head" ? "pending" : "failure");
+      assert.equal((await run()).state, "failure");
       f.pr[key].sha = sha;
     }
     f.pr.merge_commit_sha = "f".repeat(40);
@@ -806,3 +809,142 @@ for (const options of [
       undefined,
       options,
     ));
+
+test("ordinary PRs resolve both statuses without CI evidence, AI, or human attestation", async (t) => {
+  for (const automatic of [false, true])
+    await withFixture(
+      t,
+      automatic,
+      async (f, run) => {
+        f.pr.user = { type: "User", login: "owner" };
+        f.pr.head.ref = "feature/docs";
+        f.ciRuns = [];
+        f.event.inputs.approve = "true";
+        // Classification must not even open policy/review files on the N/A path.
+        rmSync(join(f.directory, ".github/dependencies"), { recursive: true });
+        const result = await run();
+        assert.equal(result.state, "success");
+        assert.match(
+          result.description,
+          /^Not applicable: no dependency changes/,
+        );
+        assert.ok(
+          f.statuses.slice(-2).every((entry) => entry.state === "success"),
+        );
+        assert.deepEqual(
+          f.requests
+            .filter(({ method }) => method === "POST")
+            .slice(-2)
+            .map(({ path }) => path),
+          [`/statuses/${f.pr.head.sha}`, `/statuses/${f.pr.merge_commit_sha}`],
+        );
+        assert.ok(
+          !f.requests.some(
+            ({ path }) =>
+              path.startsWith("/actions/") || path.endsWith("/permission"),
+          ),
+        );
+        assert.equal(
+          existsSync(join(f.directory, "approval/approval.json")),
+          false,
+        );
+        assert.equal(existsSync(join(f.directory, "MUST_NOT_EXECUTE")), false);
+      },
+      () => {},
+      { manager: "none" },
+    );
+});
+
+test("ordinary PR publication still rejects revision races", async (t) =>
+  withFixture(
+    t,
+    false,
+    async (f, run) => {
+      f.race = true;
+      const result = await run();
+      assert.equal(result.state, "failure");
+      assert.match(result.description, /changed during evaluation/);
+    },
+    () => {},
+    { manager: "none" },
+  ));
+
+test("unreadable diff evidence fails without attempting dependency review", async (t) =>
+  withFixture(
+    t,
+    false,
+    async (f, run) => {
+      f.pr.head.sha = "f".repeat(40);
+      assert.equal((await run()).state, "failure");
+      assert.ok(!f.requests.some(({ path }) => path.startsWith("/actions/")));
+    },
+    () => {},
+    { manager: "none" },
+  ));
+
+test("human updates remain applicable for every supported manager", async (t) => {
+  for (const manager of ["bun", "mise", "github-actions"])
+    await withFixture(
+      t,
+      false,
+      async (f, run) => {
+        f.pr.user = { type: "User", login: "owner" };
+        f.pr.head.ref = "feature/dependency";
+        const result = await run();
+        assert.equal(result.state, "failure");
+        assert.match(result.description, /explicit human review approval/);
+        f.event.inputs.approve = "true";
+        assert.equal((await run()).state, "success");
+      },
+      () => {},
+      { manager },
+    );
+});
+
+test("a major dependency update stays applicable and requires human review", async (t) =>
+  withFixture(
+    t,
+    true,
+    async (_f, run) => {
+      const result = await run();
+      assert.equal(result.state, "failure");
+      assert.doesNotMatch(result.description, /Not applicable/);
+    },
+    (manifest, lock) => {
+      manifest.dependencies.clsx = "^3.0.0";
+      lock.workspaces[""].dependencies.clsx = "^3.0.0";
+      lock.packages.clsx[0] = "clsx@3.0.0";
+    },
+  ));
+
+test("trusted evidence requires the renamed CI aggregate, not just its legacy alias", async (t) =>
+  withFixture(t, true, async (f, run) => {
+    f.jobs[2].name = "Dependency validation";
+    const result = await run();
+    assert.equal(result.state, "failure");
+    assert.match(
+      result.description,
+      /Required CI job missing or failed: CI validation/,
+    );
+  }));
+
+test("conservative YAML applicability preserves explicit human completion", async (t) =>
+  withFixture(
+    t,
+    false,
+    async (f, run) => {
+      const result = await run();
+      assert.equal(result.state, "failure");
+      assert.match(result.description, /explicit human review approval/);
+      f.event.inputs.approve = "true";
+      assert.equal((await run()).state, "success");
+    },
+    (_manifest, _lock, directory) => {
+      mkdirSync(join(directory, ".github/workflows"), { recursive: true });
+      writeFileSync(
+        join(directory, ".github/workflows/flow.yml"),
+        "jobs: {test: {steps: [{uses: actions/checkout@v7}]}}\n",
+      );
+    },
+    { manager: "none" },
+  ));

@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { fetchApplicability } from "./applicability.mjs";
 import {
   githubClient,
   readJson,
@@ -106,6 +107,20 @@ export async function prepare(directory, env = process.env) {
     throw new Error(
       "Reviewer only supports the repository's default base branch",
     );
+  // Ordinary changes never enter dependency evidence preparation, even when
+  // dispatched manually or carried on a Renovate-named branch.
+  const applicability = fetchApplicability({
+    headSha: pr.head.sha,
+    baseSha: pr.base.sha,
+  });
+  if (!applicability.applicable) {
+    output("ready", "false");
+    appendFileSync(
+      env.GITHUB_STEP_SUMMARY,
+      `PR #${prNumber}: dependency review not applicable; no dependency changes. No AI review performed.\n`,
+    );
+    return;
+  }
   let runId;
   if (dispatch) {
     const runs = await client.api(
@@ -146,7 +161,7 @@ export async function prepare(directory, env = process.env) {
   for (const name of [
     "Validation scope",
     "Pre-PR validation",
-    "Dependency validation",
+    "CI validation",
   ]) {
     if (
       !jobs.jobs.some(

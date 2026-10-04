@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync, writeFileSync } from "node:fs";
+import { readApplicability } from "./applicability.mjs";
 import { assertValidation, databaseApplicable, SHA } from "./policy.mjs";
 
 const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
@@ -38,8 +39,36 @@ if (command === "scope") {
     process.env.GITHUB_OUTPUT,
     `database=${databaseApplicable(paths)}\n`,
   );
-  if (identity)
+  if (identity) {
     writeFileSync("validation-identity.json", `${JSON.stringify(identity)}\n`);
+    let applicability;
+    try {
+      applicability = readApplicability(identity);
+    } catch (error) {
+      appendFileSync(
+        process.env.GITHUB_STEP_SUMMARY,
+        `Dependency policy applicability could not be established for head \`${identity.headSha}\` against base \`${identity.baseSha}\`; validation fails closed.\n`,
+      );
+      throw error;
+    }
+    console.log(
+      JSON.stringify({
+        dependencyApplicability: { ...identity, ...applicability },
+      }),
+    );
+    const details = JSON.stringify(
+      { ...identity, ...applicability },
+      null,
+      2,
+    ).replace(
+      /[&<>]/g,
+      (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[character],
+    );
+    appendFileSync(
+      process.env.GITHUB_STEP_SUMMARY,
+      `Dependency policy applicability: **${applicability.applicable ? "applies" : "not applicable"}**.\n\nThis CI report is diagnostic only. Trusted dependency workflows independently classify the current PR diff; this report cannot approve a merge.\n\n<pre>${details}</pre>\n`,
+    );
+  }
 } else if (command === "aggregate") {
   if (!["true", "false"].includes(process.env.DATABASE_REQUIRED))
     throw new Error("Missing CI applicability result");

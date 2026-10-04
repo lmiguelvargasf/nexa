@@ -7,6 +7,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { fetchApplicability } from "./applicability.mjs";
 import {
   githubClient,
   jsonArtifact,
@@ -142,11 +143,7 @@ export async function currentCI(client, pr, repository, token) {
       throw new Error("Current merge content differs from the CI-tested tree");
   }
   const { jobs } = await client.api(`actions/runs/${run.id}/jobs?per_page=100`);
-  for (const name of [
-    "Validation scope",
-    "Pre-PR validation",
-    "Dependency validation",
-  ])
+  for (const name of ["Validation scope", "Pre-PR validation", "CI validation"])
     if (
       !jobs.some(
         (job) =>
@@ -211,6 +208,12 @@ export async function evaluate(
   event,
   directory,
 ) {
+  const applicability = fetchApplicability({
+    headSha: pr.head.sha,
+    baseSha: pr.base.sha,
+  });
+  if (!applicability.applicable)
+    return "Not applicable: no dependency changes; CI validation remains required";
   const {
     identity,
     commit,
@@ -391,7 +394,10 @@ export async function gate(directory, env = process.env) {
           },
         });
     };
-    await status("pending", "Evaluating current CI and review evidence");
+    await status(
+      "pending",
+      "Checking dependency applicability for current revisions",
+    );
     let state = "failure";
     let reason;
     try {
