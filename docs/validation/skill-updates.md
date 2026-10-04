@@ -75,6 +75,25 @@ left the original checkout's skills/lock unchanged, and published nothing. This
 is verified failed-source handling, not a passing end-to-end update. The isolated
 proposal did not proceed to app/hook validation after source preparation failed.
 
+### Current live check after issue #21
+
+After rebasing onto merged PR #22 and excluding vendored examples from Biome,
+`mise exec -- task skills:check` passed from a clean committed checkout. All 16
+tracked sources prepared successfully; 11 skills had proposed updates. The isolated
+proposal passed `mise exec -- task verify` (including 38 updater fixtures and the
+production build), `mise exec -- task hooks:run`, and the post-hook upstream
+file-list, byte, lock-hash, and license comparisons. A second explicit
+`verifySources` invocation confirmed those comparisons against the retained
+upstream snapshots.
+
+The result was `validated-local-proposal`. github-issues remained at its reviewed
+revision, with candidate `143a3d976b3c1603cc8932984d5e1f28501cb5fc` pending prior
+review. The source-retirement and Resend formatting blockers are resolved. The real
+checkout's skill directories, licenses, and lock remain identical to the updated
+base; the proposed updates were retained only in the isolated checkout. No automated
+update PR was published, and the scheduled/default-token publication path has not
+been live-tested before the workflow reaches the default branch.
+
 ## Repository checks and formatting
 
 `mise exec -- task verify` passed Biome, route type generation/TypeScript, the
