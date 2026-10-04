@@ -108,7 +108,9 @@ Uploads retain the default ZIP archive format (`archive: true`), including singl
 JSON files read across runs by the dependency review and merge policy. Downloads
 retain extraction by artifact name into the configured path; digest mismatches
 now fail by default. Artifact names, retention and provenance checks are unchanged.
-These major upgrades require manual review under the dependency policy above.
+[`cache@v6`](https://github.com/actions/cache/releases/tag/v6.0.0) also declares
+Node.js 24; cache paths, keys and restore keys stay unchanged. These major upgrades
+require manual review under the dependency policy above.
 
 The always-present **Dependency validation** job aggregates scope, application
 validation, and database validation. Required checks include frozen installation,
