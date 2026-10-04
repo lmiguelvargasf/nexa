@@ -83,6 +83,7 @@ function fixture(automatic = false, mutate = () => {}) {
     ["commit-tree", git("rev-parse", "HEAD^{tree}"), "-p", base, "-p", head],
     { cwd: directory, encoding: "utf8", input: "test merge\n" },
   ).trim();
+  const tree = git("rev-parse", "HEAD^{tree}");
   git("checkout", "--quiet", base);
   const identity = {
     repository,
@@ -172,6 +173,13 @@ function fixture(automatic = false, mutate = () => {}) {
     env,
     event,
     identity,
+    commits: {
+      [tested]: {
+        sha: tested,
+        parents: [{ sha: base }, { sha: head }],
+        commit: { tree: { sha: tree } },
+      },
+    },
     pr,
     execution,
     reviewRun,
@@ -226,11 +234,8 @@ async function withFixture(t, automatic, callback, mutate) {
         f.race && f.headReads > 1
           ? { ...f.pr, head: { ...f.pr.head, sha: "e".repeat(40) } }
           : f.pr;
-    } else if (path === `/commits/${f.identity.testedSha}`)
-      value = {
-        sha: f.identity.testedSha,
-        parents: [{ sha: f.identity.baseSha }, { sha: f.identity.headSha }],
-      };
+    } else if (path.startsWith("/commits/") && f.commits[path.slice(9)])
+      value = f.commits[path.slice(9)];
     else if (path === "/actions/workflows/ci.yml/runs")
       value = { workflow_runs: f.ciRuns };
     else if (path === "/actions/workflows/dependency-merge-policy.yml/runs")
@@ -485,6 +490,47 @@ test("human approval preserves CI, verifies actor permissions and binds exact re
     f.ciRuns[0].conclusion = "failure";
     assert.equal((await run()).state, "failure");
   }));
+
+test("regenerated merge commits reuse CI only for identical parents and complete trees", async (t) => {
+  for (const automatic of [false, true]) {
+    await withFixture(t, automatic, async (f, run) => {
+      if (!automatic) f.event.inputs.approve = "true";
+      const regenerated = "f".repeat(40);
+      const tested = f.commits[f.identity.testedSha];
+      f.pr.merge_commit_sha = regenerated;
+      f.commits[regenerated] = { ...structuredClone(tested), sha: regenerated };
+      assert.equal((await run()).state, "success");
+      // Keep the original tested identity for AI and human approval provenance.
+      if (!automatic) {
+        const approval = JSON.parse(
+          readFileSync(join(f.directory, "approval/approval.json")),
+        );
+        assert.equal(approval.key, f.key);
+      }
+      for (const change of [
+        { commit: { tree: { sha: "e".repeat(40) } } },
+        { commit: {} },
+        { parents: [{ sha: f.identity.baseSha }] },
+        {
+          parents: [{ sha: "e".repeat(40) }, { sha: f.identity.headSha }],
+        },
+        {
+          parents: [{ sha: f.identity.baseSha }, { sha: "e".repeat(40) }],
+        },
+      ]) {
+        f.commits[regenerated] = {
+          ...structuredClone(tested),
+          sha: regenerated,
+          ...change,
+        };
+        assert.equal((await run()).state, "failure");
+      }
+      f.commits[regenerated] = { ...structuredClone(tested), sha: regenerated };
+      delete tested.commit;
+      assert.equal((await run()).state, "failure");
+    });
+  }
+});
 
 test("a persisted human attestation is usable only from the trusted current default-branch run", async (t) =>
   withFixture(t, false, async (f, run) => {

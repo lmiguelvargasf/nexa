@@ -42,6 +42,35 @@ test("HTTP errors, size limits and incomplete pagination stop evidence collectio
   );
 });
 
+test("npm metadata requests JSON while GitHub retains its API media type", async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    calls.push({ url, headers: options.headers });
+    if (url.startsWith("https://registry.npmjs.org/")) {
+      if (options.headers.Accept !== "application/json")
+        return new Response("Not Acceptable", { status: 406 });
+      return new Response(
+        JSON.stringify({
+          name: "zod",
+          version: "4.6.5",
+          repository: "https://github.com/colinhacks/zod",
+        }),
+      );
+    }
+    assert.equal(options.headers.Accept, "application/vnd.github+json");
+    return new Response(
+      JSON.stringify({ body: "Exact Zod release notes", draft: false }),
+    );
+  });
+  const result = await releaseEvidence(
+    { name: "zod", before: "^4.4.3", after: "^4.6.5" },
+    12000,
+  );
+  assert.equal(result.tag, "v4.6.5");
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].headers.Authorization, undefined);
+});
+
 test("exact versioned source comparison is a fallback when release notes are absent", async (t) => {
   t.mock.method(
     globalThis,
