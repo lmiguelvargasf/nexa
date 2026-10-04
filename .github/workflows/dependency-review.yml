@@ -1,0 +1,159 @@
+name: Dependency review
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Open same-repository Renovate PR with successful current CI
+        required: true
+        type: string
+      force:
+        description: Repeat an already reported review identity (may incur API cost)
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'pull_request' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       startsWith(github.event.workflow_run.head_branch, 'renovate/'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      ready: ${{ steps.prepare.outputs.ready }}
+      pr_number: ${{ steps.prepare.outputs.pr_number }}
+      policy_sha: ${{ steps.prepare.outputs.policy_sha }}
+    steps:
+      # workflow_run executes trusted default-branch code. Never check out the PR.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: true
+      - uses: jdx/mise-action@v4
+        with:
+          install_args: node
+      - name: Verify CI identity and prepare bounded evidence
+        id: prepare
+        run: node scripts/dependencies/review.mjs prepare "$RUNNER_TEMP/dependency-review"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AI_ENABLED: ${{ vars.DEPENDENCY_AI_REVIEW_ENABLED }}
+          API_CONFIGURED: ${{ secrets.OPENAI_API_KEY != '' }}
+      - name: Preserve prepared data or actionable setup failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-review-input
+          path: |
+            ${{ runner.temp }}/dependency-review/report.json
+            ${{ runner.temp }}/dependency-review/prompt.md
+            ${{ runner.temp }}/dependency-review/schema.json
+          retention-days: 7
+          if-no-files-found: ignore
+
+  review:
+    needs: prepare
+    if: needs.prepare.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: dependency-review-pr-${{ needs.prepare.outputs.pr_number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.policy_sha }}
+          persist-credentials: false
+      - uses: jdx/mise-action@v4
+        with:
+          install_args: node
+      - uses: actions/download-artifact@v4
+        with:
+          name: dependency-review-input
+          path: ${{ runner.temp }}/dependency-review
+      - name: Create isolated reviewer workspace and trusted configuration
+        run: |
+          mkdir -p "$RUNNER_TEMP/dependency-review/workspace" "$RUNNER_TEMP/dependency-review/codex-home"
+          git init --quiet "$RUNNER_TEMP/dependency-review/workspace"
+          cp .github/dependencies/codex.toml "$RUNNER_TEMP/dependency-review/codex-home/config.toml"
+      - name: Review with Sol
+        id: codex
+        uses: openai/codex-action@86365089eb2b84e0a8fb0717b304f8bdcb13b20e # reviewed v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-6.1-sol
+          effort: medium
+          codex-version: 0.160.0
+          safety-strategy: drop-sudo
+          permission-profile: ":read-only"
+          allow-bot-users: renovate[bot]
+          working-directory: ${{ runner.temp }}/dependency-review/workspace
+          codex-home: ${{ runner.temp }}/dependency-review/codex-home
+          prompt-file: ${{ runner.temp }}/dependency-review/prompt.md
+          output-schema-file: ${{ runner.temp }}/dependency-review/schema.json
+          output-file: ${{ runner.temp }}/dependency-review/result.json
+          codex-args: '["--skip-git-repo-check"]'
+      # Only trusted parsers/artifact upload follow the Action; never run PR code,
+      # install dependencies, or publish with write credentials on this runner.
+      - name: Validate output and extract numeric usage without publishing transcripts
+        if: always()
+        run: node scripts/dependencies/review.mjs finish "$RUNNER_TEMP/dependency-review"
+        env:
+          REVIEW_OUTCOME: ${{ steps.codex.outcome }}
+      - name: Preserve sanitized advisory result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-review-result
+          path: |
+            ${{ runner.temp }}/dependency-review/report.json
+            ${{ runner.temp }}/dependency-review/summary.md
+          retention-days: 30
+          if-no-files-found: error
+
+  feedback:
+    needs: [prepare, review]
+    if: always() && needs.prepare.outputs.pr_number != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.policy_sha }}
+          persist-credentials: false
+      - uses: jdx/mise-action@v4
+        with:
+          install_args: node
+      - uses: actions/download-artifact@v4
+        with:
+          name: dependency-review-input
+          path: ${{ runner.temp }}/dependency-review
+      - name: Read finished result when available
+        if: needs.review.result != 'skipped'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: dependency-review-result
+          path: ${{ runner.temp }}/dependency-review
+      - name: Report cancellation or failure when no finished result exists
+        run: node scripts/dependencies/review.mjs finish "$RUNNER_TEMP/dependency-review"
+        env:
+          REVIEW_OUTCOME: ${{ needs.review.result }}
+      - name: Recheck freshness and publish advisory feedback
+        run: node scripts/dependencies/review.mjs publish "$RUNNER_TEMP/dependency-review"
+        env:
+          GH_TOKEN: ${{ github.token }}

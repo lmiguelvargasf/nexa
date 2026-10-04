@@ -1,0 +1,17 @@
+service_tier = "default"
+project_doc_max_bytes = 0
+web_search = "disabled"
+model_reasoning_summary = "none"
+model_verbosity = "low"
+
+# The whole evidence bundle is in the prompt. No shell, browsing, external apps,
+# repository writes, instruction discovery, or additional reviewers are needed.
+[features]
+shell_tool = false
+apply_patch_freeform = false
+multi_agent = false
+multi_agent_mode = false
+apps = false
+plugins = false
+hooks = false
+skip_host_skill_discovery = true

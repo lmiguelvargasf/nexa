@@ -1,0 +1,276 @@
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import { prepare, publish } from "./review.mjs";
+
+const trusted = new URL("../../.github/dependencies/", import.meta.url);
+function fixture() {
+  const directory = mkdtempSync(join(tmpdir(), "nexa-dependency-integration-"));
+  const git = (...args) =>
+    execFileSync("git", args, {
+      cwd: directory,
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+  git("init", "--quiet");
+  git("config", "user.name", "Fixture");
+  git("config", "user.email", "fixture@example.com");
+  git("remote", "add", "origin", directory);
+  mkdirSync(join(directory, ".github"));
+  cpSync(trusted, join(directory, ".github/dependencies"), { recursive: true });
+  mkdirSync(join(directory, "src"));
+  writeFileSync(
+    join(directory, "src/usage.ts"),
+    "import { clsx } from 'clsx';\nexport const classes = clsx('px-2');\n",
+  );
+  const packageAt = (version) => ({
+    name: "fixture",
+    dependencies: { clsx: `^${version}` },
+    devDependencies: {},
+    scripts: { postinstall: "touch INSTALL_HOOK_MUST_NOT_RUN" },
+  });
+  const write = (version) => {
+    const manifest = packageAt(version);
+    writeFileSync(join(directory, "package.json"), JSON.stringify(manifest));
+    writeFileSync(
+      join(directory, "bun.lock"),
+      JSON.stringify({
+        lockfileVersion: 1,
+        workspaces: {
+          "": {
+            name: "fixture",
+            dependencies: manifest.dependencies,
+            devDependencies: {},
+          },
+        },
+        packages: { clsx: [`clsx@${version}`, "", {}, "sha512-YWJj"] },
+      }),
+    );
+  };
+  write("2.1.0");
+  git("add", ".");
+  git("commit", "--quiet", "-m", "base");
+  const base = git("rev-parse", "HEAD");
+  write("2.1.1");
+  git("add", ".");
+  git("commit", "--quiet", "-m", "helper update");
+  const head = git("rev-parse", "HEAD");
+  const tree = git("rev-parse", "HEAD^{tree}");
+  const tested = execFileSync(
+    "git",
+    ["commit-tree", tree, "-p", base, "-p", head],
+    { cwd: directory, encoding: "utf8", input: "test merge\n" },
+  ).trim();
+  git("checkout", "--quiet", base);
+  const identity = {
+    repository: "owner/copied-template",
+    prNumber: 7,
+    headSha: head,
+    baseSha: base,
+    testedSha: tested,
+    runId: 123,
+  };
+  const pr = {
+    number: 7,
+    state: "open",
+    draft: false,
+    user: { id: 29139614, login: "renovate[bot]", type: "Bot" },
+    head: {
+      sha: head,
+      ref: "renovate/clsx",
+      repo: { full_name: identity.repository },
+    },
+    base: { sha: base, ref: "main", repo: { full_name: identity.repository } },
+  };
+  writeFileSync(
+    join(directory, "validation-identity.json"),
+    JSON.stringify(identity),
+  );
+  execFileSync(
+    "zip",
+    ["-q", join(directory, "identity.zip"), "validation-identity.json"],
+    { cwd: directory },
+  );
+  writeFileSync(
+    join(directory, "event.json"),
+    JSON.stringify({
+      workflow_run: { id: 123, pull_requests: [{ number: 7 }] },
+    }),
+  );
+  const env = {
+    GITHUB_REPOSITORY: identity.repository,
+    GITHUB_EVENT_PATH: join(directory, "event.json"),
+    GITHUB_EVENT_NAME: "workflow_run",
+    GITHUB_RUN_ID: "456",
+    GITHUB_STEP_SUMMARY: join(directory, "summary.md"),
+    AI_ENABLED: "true",
+    API_CONFIGURED: "true",
+  };
+  return {
+    directory,
+    env,
+    identity,
+    pr,
+    commit: { sha: tested, parents: [{ sha: base }, { sha: head }] },
+  };
+}
+
+async function withFixture(t, callback) {
+  const f = fixture();
+  const cwd = process.cwd();
+  const oldOutput = process.env.GITHUB_OUTPUT;
+  process.env.GITHUB_OUTPUT = join(f.directory, "output.txt");
+  const calls = [];
+  let comments = [];
+  t.mock.method(globalThis, "fetch", async (url, options = {}) => {
+    const path = new URL(url).pathname;
+    calls.push({ path, method: options.method ?? "GET", body: options.body });
+    let value;
+    if (path === "/repos/owner/copied-template")
+      value = { default_branch: "main" };
+    else if (path.endsWith("/pulls/7")) value = f.pr;
+    else if (path.endsWith(`/commits/${f.identity.testedSha}`))
+      value = f.commit;
+    else if (path.endsWith("/actions/runs/123"))
+      value = {
+        id: 123,
+        event: "pull_request",
+        path: ".github/workflows/ci.yml",
+        status: "completed",
+        conclusion: "success",
+        head_repository: { full_name: f.env.GITHUB_REPOSITORY },
+        head_sha: f.identity.headSha,
+      };
+    else if (path.endsWith("/actions/runs/123/jobs"))
+      value = {
+        jobs: [
+          "Validation scope",
+          "Pre-PR validation",
+          "Dependency validation",
+        ].map((name) => ({ name, status: "completed", conclusion: "success" })),
+      };
+    else if (path.endsWith("/actions/runs/123/artifacts"))
+      value = {
+        artifacts: [
+          {
+            id: 99,
+            name: "validation-identity",
+            size_in_bytes: 1000,
+            expired: false,
+          },
+        ],
+      };
+    else if (path.endsWith("/actions/artifacts/99/zip"))
+      return new Response(readFileSync(join(f.directory, "identity.zip")));
+    else if (path.endsWith("/pulls/7/files"))
+      value = ["package.json", "bun.lock"].map((filename) => ({
+        filename,
+        status: "modified",
+      }));
+    else if (path.endsWith("/issues/7/comments")) {
+      if (options.method === "POST") {
+        value = { id: 88 };
+        comments = [
+          {
+            id: 88,
+            user: { login: "github-actions[bot]" },
+            body: JSON.parse(options.body).body,
+          },
+        ];
+      } else value = comments;
+    } else if (path.endsWith("/clsx/2.1.1"))
+      value = {
+        name: "clsx",
+        version: "2.1.1",
+        repository: "https://github.com/lukeed/clsx",
+      };
+    else if (path.endsWith("/releases/tags/v2.1.1"))
+      value = {
+        body: "Fix conditional class handling",
+        html_url: "https://github.com/lukeed/clsx/releases/tag/v2.1.1",
+      };
+    else throw new Error(`Unexpected fixture request ${path}`);
+    return new Response(JSON.stringify(value));
+  });
+  process.chdir(f.directory);
+  try {
+    await callback(f, calls, (next) => {
+      comments = next;
+    });
+  } finally {
+    process.chdir(cwd);
+    if (oldOutput === undefined) delete process.env.GITHUB_OUTPUT;
+    else process.env.GITHUB_OUTPUT = oldOutput;
+    rmSync(f.directory, { recursive: true, force: true });
+  }
+}
+
+test("prepare uses data-only PR reads, current successful CI and complete evidence", async (t) =>
+  withFixture(t, async (f, calls) => {
+    const out = join(f.directory, "prepared");
+    await prepare(out, f.env);
+    const report = JSON.parse(readFileSync(join(out, "report.json")));
+    assert.equal(report.status, "PENDING");
+    assert.equal(report.eligibility.candidate, true);
+    assert.equal(report.policy.model, "gpt-6.1-sol");
+    assert.match(
+      readFileSync(join(out, "prompt.md"), "utf8"),
+      /UNTRUSTED EVIDENCE/,
+    );
+    assert.equal(
+      existsSync(join(f.directory, "INSTALL_HOOK_MUST_NOT_RUN")),
+      false,
+    );
+    assert.ok(calls.every((call) => call.method === "GET"));
+  }));
+
+test("missing setup, duplicate reviews and untrusted labels cannot initiate a paid run", async (t) =>
+  withFixture(t, async (f, _calls, setComments) => {
+    const out = join(f.directory, "prepared");
+    await prepare(out, { ...f.env, API_CONFIGURED: "false" });
+    let report = JSON.parse(readFileSync(join(out, "report.json")));
+    assert.equal(report.status, "DISABLED");
+    assert.equal(existsSync(join(out, "prompt.md")), false);
+    setComments([
+      {
+        user: { login: "github-actions[bot]" },
+        body: `<!-- dependency-review:${report.key} run:400 -->`,
+      },
+    ]);
+    await prepare(out, f.env);
+    report = JSON.parse(readFileSync(join(out, "report.json")));
+    assert.equal(report.status, "DUPLICATE");
+    f.pr.labels = [{ name: "automerge" }];
+    f.pr.user.id = 1;
+    await assert.rejects(prepare(out, f.env), /Renovate/);
+  }));
+
+test("base advancement after preparation prevents advisory publication", async (t) =>
+  withFixture(t, async (f, calls) => {
+    const out = join(f.directory, "prepared");
+    await prepare(out, { ...f.env, AI_ENABLED: "false" });
+    f.pr.base.sha = "d".repeat(40);
+    await assert.rejects(publish(out, f.env), /Stale/);
+    assert.ok(calls.every((call) => call.method === "GET"));
+  }));
+
+test("fresh advisory feedback is posted to the resolved copied repository", async (t) =>
+  withFixture(t, async (f, calls) => {
+    const out = join(f.directory, "prepared");
+    await prepare(out, { ...f.env, AI_ENABLED: "false" });
+    await publish(out, f.env);
+    const post = calls.find((call) => call.method === "POST");
+    assert.equal(post.path, "/repos/owner/copied-template/issues/7/comments");
+    assert.match(JSON.parse(post.body).body, /automatic merging is disabled/);
+  }));
