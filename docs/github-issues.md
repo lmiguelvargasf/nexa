@@ -85,11 +85,6 @@ repository names or assuming labels/types exist. Read back requested changes,
 including native parent/sub-issue or blocking relationships. A body link alone
 does not verify those relationships.
 
-The [draft exercises](validation/github-issues.md) cover template selection,
-uncertainty, and preservation of existing content. The implementation PR records
-the temporary-checkout refresh and live read-only clone checks separately from
-those drafts; no throwaway issues are needed.
-
 ## Scheduled candidate preparation
 
 The [project skill updater](skill-updates.md) preserves this contract. It reports
