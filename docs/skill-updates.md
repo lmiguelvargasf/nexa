@@ -142,11 +142,14 @@ exception to the other vendored sources; it does not exempt repository-owned cod
 or guidance from formatting checks.
 
 These checks run inside the update job **before** it creates or refreshes the PR.
-GitHub's `GITHUB_TOKEN` generally does not trigger another workflow from its push
-or PR events, so the updater does not rely on those events. After publication,
+GitHub suppresses workflows triggered by token-authenticated pushes. Its current
+PR-event behavior can create runs that require a maintainer to select **Approve
+workflows to run**; the updater therefore does not depend on those runs for its
+own validation. After publication,
 it attaches the `Skill updates / validation` success status to the validated tree's
-published commit. If branch protection requires an ordinary CI check too, run
-that check with a supported maintainer trigger before merging; never bypass it.
+published commit. If branch protection requires an ordinary CI check too, approve
+the waiting workflow or use a supported maintainer trigger before merging; never
+bypass it. See [GitHub's current token-trigger rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow).
 
 The update branch contains a generated commit with ownership metadata binding its
 tree and base. Refreshes verify ownership and use a Git lease to protect against

@@ -64,6 +64,13 @@ was removed or substituted. A complete live all-skill update cannot succeed unti
 that separate maintenance decision is resolved; this failure is not reported as
 a successful update.
 
+The full default runner was exercised from a clean committed checkout with
+`mise exec -- task skills:check`. It reached this same retired source and exited
+unsuccessfully (updater exit 1; Task wrapper exit 201), saved a `failed` result,
+left the original checkout's skills/lock unchanged, and published nothing. This
+is verified failed-source handling, not a passing end-to-end update. The isolated
+proposal did not proceed to app/hook validation after source preparation failed.
+
 ## Repository checks and formatting
 
 `mise exec -- task verify` passed Biome, route type generation/TypeScript, the
@@ -77,6 +84,10 @@ The four mutating file-hygiene hooks now exclude all vendored skill and attribut
 files, extending the existing github-issues exception. Syntax, secret, and other
 checks remain enabled. No installed skill, license, or current lock entry is changed
 by this implementation PR.
+
+After the passing hook run, `diff -qr` against the independently fetched pinned
+github-issues snapshot and `cmp` for the external license both passed. The exported
+`hashDirectory` function also matched the installed folder to the lock hash.
 
 ## Live GitHub configuration
 
