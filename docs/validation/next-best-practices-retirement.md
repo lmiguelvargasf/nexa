@@ -38,8 +38,8 @@ contract is preserved. Repository-owned files remain subject to formatting check
 ## Live updater integration
 
 The updater is not yet on `main`. A temporary checkout combined PR #20's exact
-head `284c12e11255fa4c7b0c4c1c97c3d28b19ec570d` with this issue's removal and README
-changes, then committed that combination locally so the updater's clean-checkout
+head `284c12e11255fa4c7b0c4c1c97c3d28b19ec570d` with this issue's retirement changes,
+then committed that combination locally so the updater's clean-checkout
 requirement could be exercised. Neither original checkout nor PR #20 was changed.
 
 `mise exec -- task skills:check` fetched the remaining tracked sources and completed
