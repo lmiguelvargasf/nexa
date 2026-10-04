@@ -46,7 +46,9 @@ export function summary(report) {
   const { identity, policy, result, usage, cost } = report;
   return [
     `<!-- dependency-review:${report.key} run:${report.runId} -->`,
-    "**Dependency review — supervised; automatic merging is disabled.**",
+    policy.automaticMerging
+      ? "**Dependency review — the trusted merge policy decides eligibility.**"
+      : "**Dependency review — supervised; automatic merging is disabled.**",
     `Result: **${report.status}**. ${safeText(report.reason ?? result?.summary ?? "")}`,
     `Model: \`${policy.model}\`; effort: \`${policy.effort}\`; processing: standard.`,
     `Reviewed head: \`${identity.headSha}\`; base: \`${identity.baseSha}\`; tested merge: \`${identity.testedSha}\`.`,
@@ -66,7 +68,9 @@ export function summary(report) {
     usage
       ? `Tokens: input ${usage.input}, cached ${usage.cachedInput}, output ${usage.output} (includes ${usage.reasoning} reasoning). Estimated token cost: $${cost.toFixed(4)}.`
       : "Token usage/cost unavailable; check the dedicated API project's usage. A failure may still have incurred cost.",
-    "CI remains required. Review this update manually; AI output never authorizes a merge during the pilot.",
+    policy.automaticMerging
+      ? "CI remains required. Only the trusted merge policy can authorize an eligible helper update."
+      : "CI remains required. Review this update manually; AI output never authorizes a merge during the pilot.",
   ].join("\n\n");
 }
 

@@ -65,14 +65,36 @@ export function githubClient(repository, token) {
 }
 
 export async function validationIdentity(client, runId, token, repository) {
+  const identity = await jsonArtifact(
+    client,
+    runId,
+    token,
+    repository,
+    "validation-identity",
+    "validation-identity.json",
+    8192,
+  );
+  if (identity.runId !== runId) throw new Error("CI run identity mismatch");
+  return identity;
+}
+
+export async function jsonArtifact(
+  client,
+  runId,
+  token,
+  repository,
+  name,
+  filename,
+  maxBytes = 65536,
+) {
   const { artifacts } = await client.api(
     `actions/runs/${runId}/artifacts?per_page=100`,
   );
   const identities = artifacts.filter(
-    (entry) => entry.name === "validation-identity" && !entry.expired,
+    (entry) => entry.name === name && !entry.expired,
   );
   if (identities.length !== 1 || identities[0].size_in_bytes > 65536)
-    throw new Error("Missing or ambiguous CI identity artifact");
+    throw new Error(`Missing or ambiguous ${name} artifact`);
   const directory = mkdtempSync(join(tmpdir(), "dependency-ci-"));
   try {
     const zip = await request(
@@ -82,14 +104,11 @@ export async function validationIdentity(client, runId, token, repository) {
     const archive = join(directory, "identity.zip");
     writeFileSync(archive, zip);
     // Read one small data file; never extract paths or execute CI artifacts.
-    const content = execFileSync(
-      "unzip",
-      ["-p", archive, "validation-identity.json"],
-      { encoding: "utf8", maxBuffer: 8192 },
-    );
-    const identity = JSON.parse(content);
-    if (identity.runId !== runId) throw new Error("CI run identity mismatch");
-    return identity;
+    const content = execFileSync("unzip", ["-p", archive, filename], {
+      encoding: "utf8",
+      maxBuffer: maxBytes,
+    });
+    return JSON.parse(content);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

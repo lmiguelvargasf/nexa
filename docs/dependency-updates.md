@@ -2,8 +2,11 @@
 
 Renovate prepares updates; CI validates them; a bounded Sol review can provide
 advisory feedback. **Every merge is manual during this supervised delivery.**
-`renovate.json` has `automerge: false`, and the review policy rejects any mode other
-than `supervised`. Changing a label or receiving AI `PASS` cannot enable merging.
+`renovate.json` has `automerge: false`, the policy has `automaticMerging: false`,
+and `DEPENDENCY_AUTOMERGE_ENABLED` is unset. Changing a label or receiving AI
+`PASS` cannot enable merging. The trusted merge gate is implemented separately
+from the secret-bearing reviewer; requiring it and activating merging are rollout
+steps, tracked in [#29](https://github.com/lmiguelvargasf/nexa/issues/29).
 
 ## Schedule and update sources
 
@@ -166,22 +169,98 @@ saved. A fixed pilot count is an operational milestone, not a safety certificati
 | Evidence | Current status |
 | --- | --- |
 | Local configuration validation/extraction and isolated failure-path fixtures | Recorded in the implementation PR |
-| Hosted Renovate installation and a reproducible Bun/mise update | Pending external setup/onboarding |
-| Funded project, API secret and enforced spending cap | Not verified; no paid pilot review run |
+| Hosted Renovate installation and a reproducible Bun/mise update | Nexa-only installation 167693154 verified; dashboard #28 exists; reproducible update PR pending |
+| Funded project, API secret and enforced spending cap | Secret, review-enable variable, $5 prepaid balance, auto-reload off, and enforced $5 project cap verified October 3; no paid pilot review run |
 | Active required-check rules in the destination repository | Verified for Nexa ruleset 17001152; reconfigure for copied repositories |
 | Real PR outcomes and measured Sol costs | Pending pilot |
 | Maintainer's automatic-merge activation decision | Pending; automatic merging disabled |
 
-After the pilot, implement and demonstrate a trusted required merge policy with
-an explicit manual completion path before enabling the approved helper subset.
-It must evaluate every direct/transitive/file change outside the LLM, verify
-current tested/reviewed revisions, and require AI `PASS` for automatic merges.
-An authorized human's review of the current revision must provide the manual path;
-AI failure must never authorize automatic merging or force protection bypass.
-Use strict GitHub checks, Renovate rebasing, and platform-native merging. The AI
-reviewer retains no merge permission. No custom merge coordinator/queue, release
-crawler, review database, multiple reviewers, or autonomous application fixes are
-part of this delivery.
+### Trusted merge policy and human completion
+
+**Evaluate dependency merge policy** executes only default-branch code, never
+installs/checks out PR code, and has no OpenAI secret or merge permission. It writes
+the explicit commit status **Dependency merge policy** on the PR head and current
+synthetic merge commit, covering GitHub's revision precedence. This status
+is separate from its workflow job: follow-up/dispatch job checks alone do not
+satisfy PR required-check plumbing. Serialized evaluations read live API state,
+invalidate on PR/CI/review activity and main advancement, and recheck head/base
+immediately before publishing success. Strict branch protection and GitHub native
+auto-merge provide the final up-to-date check and merge; there is no custom queue
+or merge API call.
+
+Every successful decision requires the latest current CI to pass, all aggregate
+jobs to succeed, and the identity artifact's tested commit to equal the current
+GitHub synthetic merge commit with the exact head/base parents. Failed or missing
+evidence produces a failing status with a link to the workflow summary. Legitimately
+inapplicable database checks remain handled by **Dependency validation**.
+
+Once required, the gate applies to all PRs to the default branch. Human completion
+uses an explicit revision-bound attestation, including for protected updates and
+AI failures. Review the diff and CI yourself, then select Actions → Evaluate
+dependency merge policy → Run workflow on **main**, set the PR number, check
+`approve`, and enter the full reviewed head/base SHAs. The CLI equivalent is:
+
+```sh
+mise exec -- gh pr view PR_NUMBER --repo OWNER/REPO --json headRefOid,baseRefOid
+mise exec -- gh workflow run dependency-merge-policy.yml --repo OWNER/REPO --ref main \
+  -f pr_number=PR_NUMBER -f approve=true \
+  -f expected_head=REVIEWED_HEAD_SHA -f expected_base=REVIEWED_BASE_SHA
+```
+
+Only a human with current write/maintain/admin permission can attest. This supports
+solo maintainers reviewing their own PRs. The attestation does not waive CI or
+repository protection. It is stored as a small Actions artifact, bound to
+repository/PR/head/base/tested identity and current trusted review policy; future
+evaluations verify its workflow/run provenance and the actor's current permission.
+New commits, rebases, base/policy changes, or expired/deleted artifacts require fresh
+approval. To withdraw approval, close the PR or change its revision; cancel any
+queued native auto-merge first. Comments, labels, and a successful AI process are
+never approval. Selecting `approve=false` simply reevaluates; it does not revoke
+a prior attestation.
+
+Automatic approval additionally requires both activation controls below, the
+actual Renovate bot identity, independently computed stable helper eligibility
+over the entire Git diff and lockfile, and a schema-valid complete `PASS` artifact
+from the current trusted **Dependency review** workflow. The latest matching
+review attempt must succeed; an older PASS cannot mask a later error or block.
+Artifacts are read as bounded JSON, never executed. Recent evidence lookup is
+limited to 100 workflow runs, with 30-day review/approval retention and 7-day CI
+identity retention; missing, ambiguous, expired, or older evidence blocks and
+requires an intentional rerun. No review database is introduced.
+
+### Activation ordering
+
+1. Merge the gate implementation through the existing review process. Leave
+   automatic merging disabled. Run the new workflow on a current validated PR,
+   demonstrate both its failing unapproved status and successful human path, and
+   verify GitHub associates the explicit status with that PR head.
+2. Add **Dependency merge policy** from GitHub Actions (integration 15368) as a
+   required status in the existing main ruleset. Preserve **Dependency validation**,
+   strict up-to-date branches, PR requirements, and no bypass actors. Do this only
+   after the status has been produced successfully; requiring an unpublished
+   workflow would deadlock its own implementation PR.
+3. Assess and record actual Renovate PRs and Sol outcomes/costs in #16. Record the
+   maintainer's explicit activation decision. Fixtures and a dashboard are not a
+   completed pilot. No eligible helper patch currently appears in Nexa's dashboard;
+   do not invent an update or widen eligibility just to demonstrate merging.
+4. In a reviewed configuration PR, set policy `automaticMerging: true` and add
+   `automerge: true` plus `automergeType: "pr"` **only** to the existing stable
+   helpers patch rule in `renovate.json`. Keep global `automerge: false`,
+   `platformAutomerge: true`, and `rebaseWhen: "behind-base-branch"`. Keep security,
+   minor/major, and protected update rules manual. The gate still evaluates all
+   actual file/dependency changes, regardless of Renovate's classification.
+5. Verify both required statuses and strict rules, enable GitHub repository
+   auto-merge, then set `DEPENDENCY_AUTOMERGE_ENABLED=true`. Obtain a fresh current
+   Sol review after the configuration change; old-policy results cannot qualify.
+   Record an actual eligible native automatic merge in #29 and #16 before closing
+   activation work. The reviewer retains no merge credential.
+
+To stop automatic merging, disable repository auto-merge and cancel already queued
+PR auto-merges, set `DEPENDENCY_AUTOMERGE_ENABLED=false`, and dispatch evaluations
+for open PRs. Then revert the helper rule/policy activation in a reviewed PR.
+Changing a variable alone does not cancel a merge already queued by GitHub. Human
+completion and all deterministic required checks remain available. Disabling AI
+review does not count as approval.
 
 ## Local validation
 
