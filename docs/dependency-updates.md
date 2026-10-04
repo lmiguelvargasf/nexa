@@ -276,9 +276,9 @@ installs/checks out PR code, and has no OpenAI secret or merge permission. It wr
 the explicit commit status **Dependency merge policy** on the PR head and current
 synthetic merge commit, covering GitHub's revision precedence. This status
 is separate from its workflow job: follow-up/dispatch job checks alone do not
-satisfy PR required-check plumbing. Serialized evaluations read live API state,
-invalidate on PR/CI/review activity and main advancement, and recheck head/base
-immediately before publishing success. Strict branch protection and GitHub native
+satisfy PR required-check plumbing. Per-PR serialized evaluations read live API state,
+invalidate on PR/CI/review activity and main advancement, and recheck head/base/merge
+and selected CI/review attempts before publishing decisions on either revision. Strict branch protection and GitHub native
 auto-merge provide the final up-to-date check and merge; there is no custom queue
 or merge API call.
 
@@ -336,8 +336,8 @@ database checks remain handled by **CI validation**.
 Every evaluation writes its decision and reason to the job log and summary.
 Pending decisions produce a notice: the evaluator can finish successfully while
 the required commit status continues waiting for CI. Failed decisions produce an
-error annotation and fail the evaluator workflow after all open PRs have been
-evaluated. A green evaluator job therefore does not mean a pending PR is approved.
+error annotation and fail that PR evaluator. Bulk refreshes keep evaluating
+other PRs with independent matrix jobs. A green evaluator job therefore does not mean a pending PR is approved.
 Human-authored dependency PRs remain applicable in automatic mode and receive an
 explicit human-approval message instead of an automatic-review identity error.
 Failure summaries link to the manual workflow and include the exact head/base
@@ -372,10 +372,96 @@ actual Renovate bot identity, independently computed dependency eligibility
 over the entire Git diff and lockfile, and a schema-valid complete `PASS` artifact
 from the current trusted **Dependency review** workflow. The latest matching
 review attempt must succeed; an older PASS cannot mask a later error or block.
+Reruns are ordered by attempt start (including queued reruns), and new reports
+include the attempt number so an earlier attempt cannot supply evidence for a rerun.
 Artifacts are read as bounded JSON, never executed. Recent evidence lookup is
 limited to 100 workflow runs, with 30-day review/approval retention and 7-day CI
 identity retention; missing, ambiguous, expired, or older evidence blocks and
 requires an intentional rerun. No review database is introduced.
+
+### Targeted evaluations and rollout recovery
+
+CI and review start/completion events refetch the source run from GitHub and
+resolve only its affected PR. PR event payloads and CI-produced artifact identifiers
+cannot choose another target. CI association uses the API's PR relationship, or a
+unique repository/branch match with a matching current head/test merge. Fork CI is
+supported for human completion. Missing/ambiguous associations fail the resolver
+with an actionable error instead of scanning the backlog or guessing.
+
+Trusted review run names encode either the source CI run ID with a GitHub PR
+relationship hint, or the manually requested PR number. Unrelated PR hints avoid
+artifact/API fan-out; selected hints must match the refetched source CI. The gate validates workflow/repository/default-branch
+provenance and resolves the source CI through GitHub before requesting artifacts.
+Legacy entirely skipped runs are ignored only after the API confirms every job was
+skipped. Other legacy completed runs still require their trusted input artifact;
+an unassociated active or artifact-less legacy run requires an intentional updated
+review rerun. There is no blanket artifact-error suppression. A relevant completed
+missing/expired/corrupt/ambiguous artifact still blocks; disabled preparation and
+`NEEDS_HUMAN` give their actual reason. A relevant active review stays pending and
+completion triggers reevaluation. A duplicate with the exact current identity may
+reuse its previously completed evidence; newer failed attempts cannot do so.
+
+Only main pushes and deliberate `pr_number=all` dispatches enumerate open PRs
+(maximum 256). Bulk human approval is forbidden. The read-only resolver produces a
+matrix with at most four simultaneous evaluators. Every evaluator, including a
+base refresh, takes the same concurrency lock for its PR. There is no repository-
+wide status-publication lock. Queued legacy workflow definitions lack the new per-PR matrix target and
+stop before writing rather than competing with the new lock. Obsolete checkouts stop before writing; head, base,
+merge, and selected run changes skip obsolete final statuses. The current activity
+triggers the next evaluation. GitHub status writes are not an atomic transaction
+with revision changes; per-PR serialization, repeated freshness checks, strict
+up-to-date protections and native merging remain necessary together.
+
+After merging this repair through the normal review process, validate one existing
+eligible same-major update first. Refresh its branch/lockfile through Renovate,
+wait for successful current frozen CI, and inspect the fresh bounded review.
+Dispatch `Dependency review` for that PR only if needed; use `force=true` only for
+an intentional repeat of a reported identity. Record CI/review/gate run URLs,
+current head/base/tested merge, complete PASS, and both required commit statuses.
+If evidence is missing/oversized, review is disabled, or Sol requires a human,
+record that blocker and use the existing personally reviewed attestation path;
+do not increase evidence limits or manufacture PASS. The new trusted workflow
+cannot be demonstrated on an implementation branch before default-branch rollout.
+
+Resume routine updates in batches of at most three (the existing
+`prConcurrentLimit`), inspect outcomes before proceeding, and use individual gate
+dispatches for retrying existing PRs. The limit controls new PR creation; it does
+not reduce the already open backlog. Do not close/rewrite/merge existing PRs as
+cleanup or repeatedly force full-dashboard refreshes. Main advances still require
+fresh revision-bound evidence for affected updates.
+
+#### October 4, 2026 frozen-install diagnosis (#108)
+
+All four observed failed runs stop at the same transitive release-age blocker:
+`ip-address@10.7.3` cannot be resolved under Bun's default 259200-second cooldown.
+Each corresponding Renovate artifact-update comment reports the same error for
+`bun.lock`; each PR currently changes only `package.json`, leaving its override
+change unsynchronized with the lockfile. Isolated copies of those four manifest
+changes reproduce the same failure with `bun install --frozen-lockfile --ignore-scripts`
+on pinned Bun 1.4.2. This is independent of the gate's review
+lookup error, not a successful frozen install or four distinct application test
+regressions.
+
+| PR | Override change | Failed current CI run |
+| --- | --- | --- |
+| [#67](https://github.com/lmiguelvargasf/nexa/pull/67) | `ws` 8.21.0 → 8.21.3 | [37228713799](https://github.com/lmiguelvargasf/nexa/actions/runs/37228713799) |
+| [#91](https://github.com/lmiguelvargasf/nexa/pull/91) | `ws` 8.21.0 → 8.22.0 | [37228961590](https://github.com/lmiguelvargasf/nexa/actions/runs/37228961590) |
+| [#100](https://github.com/lmiguelvargasf/nexa/pull/100) | `fast-uri` 3.1.8 → 4.2.1 | [37229052537](https://github.com/lmiguelvargasf/nexa/actions/runs/37229052537) |
+| [#102](https://github.com/lmiguelvargasf/nexa/pull/102) | `protobufjs` 7.6.6 → 8.8.0 | [37229071147](https://github.com/lmiguelvargasf/nexa/actions/runs/37229071147) |
+
+The [npm registry publication record](https://registry.npmjs.org/ip-address) gives
+`10.7.3` as October 1, 2026 at 22:35:03.666 UTC. Its three-day threshold is
+**October 4 at 17:35:03.666 America/Guayaquil (22:35:03.666 UTC)**. Retry Renovate
+artifact generation after that threshold, one PR at a time; confirm a regenerated
+`bun.lock` is committed, then rerun frozen CI against the resulting current head.
+Repeating CI on the unchanged manifest-only PR is insufficient to repair the lock.
+Any further newly resolved package can have its own cooldown; record its exact
+registry publication time rather than waiving the policy. The unchanged main
+lockfile installs successfully because its versions are already locked; these
+changed overrides trigger fresh resolution. Major override upgrades (#100/#102)
+still require mandatory human review even after their installs pass. Preserve the
+three-day default, frozen installs, existing security-exception procedure, evidence
+budgets and merge eligibility. No existing dependency PR is modified by this repair.
 
 ### Activation ordering
 

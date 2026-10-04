@@ -22,6 +22,14 @@ import {
   validateReview,
 } from "./policy.mjs";
 
+import {
+  ACTIVE,
+  eventTargets,
+  latestAttempts,
+  REVIEW_WORKFLOW,
+  reviewTarget,
+} from "./run-targets.mjs";
+
 import { inspectUpdates, readUpdates } from "./updates.mjs";
 
 const ROOT = ".github/dependencies";
@@ -35,6 +43,7 @@ const safe = (text) =>
     .slice(0, 1000);
 
 class WaitingForCI extends Error {}
+class ObsoleteEvaluation extends Error {}
 
 export function trustedRun(run, path, repository, baseSha, branch) {
   return (
@@ -51,6 +60,7 @@ export function trustedRun(run, path, repository, baseSha, branch) {
 export function assertReport(report, run, identity, policy, key, schema) {
   if (
     report.runId !== run.id ||
+    (report.runAttempt ?? 1) !== (run.run_attempt ?? 1) ||
     report.key !== key ||
     report.status !== "PASS" ||
     report.complete !== true ||
@@ -89,14 +99,16 @@ export async function authorizedHuman(client, user) {
 
 async function runs(client, workflow, branch) {
   // A bounded lookup. Missing/older evidence blocks and requires an intentional rerun.
-  return (
-    await client.api(
-      `actions/workflows/${workflow}/runs?branch=${encodeURIComponent(branch)}&per_page=100`,
-    )
-  ).workflow_runs;
+  return latestAttempts(
+    (
+      await client.api(
+        `actions/workflows/${workflow}/runs?branch=${encodeURIComponent(branch)}&per_page=100`,
+      )
+    ).workflow_runs,
+  );
 }
 
-export async function currentCI(client, pr, repository, token) {
+export async function currentCI(client, pr, repository, token, guards = []) {
   const candidates = await runs(client, "ci.yml", pr.head.ref);
   // Do not fall back to an older green run when a newer current-revision run failed.
   const run = candidates.find(
@@ -105,6 +117,19 @@ export async function currentCI(client, pr, repository, token) {
       entry.head_repository?.full_name === pr.head.repo.full_name &&
       [pr.head.sha, pr.merge_commit_sha].includes(entry.head_sha),
   );
+  const stamp = runStamp(run);
+  guards.push(async () => {
+    const latest = (await runs(client, "ci.yml", pr.head.ref)).find(
+      (entry) =>
+        entry.event === "pull_request" &&
+        entry.head_repository?.full_name === pr.head.repo.full_name &&
+        [pr.head.sha, pr.merge_commit_sha].includes(entry.head_sha),
+    );
+    if (runStamp(latest) !== stamp)
+      throw new ObsoleteEvaluation(
+        "CI changed during evaluation; obsolete decision publication skipped",
+      );
+  });
   if (!run) throw new WaitingForCI("Waiting for current-revision CI to start");
   if (run.path !== ".github/workflows/ci.yml")
     throw new Error(
@@ -198,6 +223,40 @@ async function humanApproval(client, repository, token, pr, branch, key) {
   return null;
 }
 
+const runStamp = (run) =>
+  JSON.stringify(
+    run && [
+      run.id,
+      run.run_attempt ?? 1,
+      run.status,
+      run.conclusion,
+      run.run_started_at,
+    ],
+  );
+
+async function relevantReview(client, repository, token, pr, branch, identity) {
+  for (const entry of await runs(client, "dependency-review.yml", branch)) {
+    if (
+      entry.path !== REVIEW_WORKFLOW ||
+      entry.head_sha !== pr.base.sha ||
+      !["workflow_run", "workflow_dispatch"].includes(entry.event)
+    )
+      continue;
+    if (
+      (await reviewTarget(
+        client,
+        entry,
+        repository,
+        branch,
+        token,
+        identity,
+      )) === pr.number
+    )
+      return entry;
+  }
+  return null;
+}
+
 export async function evaluate(
   client,
   repository,
@@ -207,6 +266,7 @@ export async function evaluate(
   env,
   event,
   directory,
+  guards = [],
 ) {
   const applicability = fetchApplicability({
     headSha: pr.head.sha,
@@ -218,7 +278,7 @@ export async function evaluate(
     identity,
     commit,
     run: ci,
-  } = await currentCI(client, pr, repository, token);
+  } = await currentCI(client, pr, repository, token, guards);
   const policy = readJson(`${ROOT}/policy.json`);
   const schemaText = readFileSync(`${ROOT}/review-schema.json`, "utf8");
   const key = reviewIdentity(
@@ -295,22 +355,49 @@ export async function evaluate(
   );
   const eligibility = inspectUpdates(readUpdates(identity));
   if (!eligibility.candidate) throw new Error(eligibility.reasons.join(" "));
-  const reviews = await runs(client, "dependency-review.yml", branch);
-  const reviewRun = reviews.find(
-    (entry) =>
-      entry.path === ".github/workflows/dependency-review.yml" &&
-      entry.head_sha === pr.base.sha &&
-      ["workflow_run", "workflow_dispatch"].includes(entry.event),
+  const firstReview = await relevantReview(
+    client,
+    repository,
+    token,
+    pr,
+    branch,
+    identity,
   );
-  // Inspect the latest review attempt for this PR, not just a previous PASS.
-  // Workflow runs aren't indexed by PR: use the trusted prepared identity artifact.
+  guards.push(async () => {
+    const latest = await relevantReview(
+      client,
+      repository,
+      token,
+      pr,
+      branch,
+      identity,
+    );
+    if (runStamp(latest) !== runStamp(firstReview))
+      throw new ObsoleteEvaluation(
+        "Review changed during evaluation; obsolete decision publication skipped",
+      );
+  });
+  const reviews = await runs(client, "dependency-review.yml", branch);
   for (const entry of reviews) {
     if (
-      entry.path !== ".github/workflows/dependency-review.yml" ||
+      entry.path !== REVIEW_WORKFLOW ||
       entry.head_sha !== pr.base.sha ||
       !["workflow_run", "workflow_dispatch"].includes(entry.event)
     )
       continue;
+    const target = await reviewTarget(
+      client,
+      entry,
+      repository,
+      branch,
+      token,
+      identity,
+    );
+    if (target !== pr.number) continue;
+    if (ACTIVE.includes(entry.status))
+      throw new WaitingForCI(
+        `Waiting for current PR dependency review to finish (${entry.status})`,
+      );
     const input = await jsonArtifact(
       client,
       entry.id,
@@ -319,18 +406,34 @@ export async function evaluate(
       "dependency-review-input",
       "report.json",
     );
-    if (input.identity?.prNumber !== pr.number) continue;
     if (
-      !trustedRun(
-        entry,
-        ".github/workflows/dependency-review.yml",
-        repository,
-        pr.base.sha,
-        branch,
+      input.runId !== entry.id ||
+      (input.runAttempt ?? 1) !== (entry.run_attempt ?? 1) ||
+      input.identity?.repository !== repository ||
+      input.identity?.prNumber !== pr.number
+    )
+      throw new Error("Prepared review identity has invalid provenance");
+    // A valid old revision is unrelated to the exact current review identity.
+    for (const field of ["headSha", "baseSha", "testedSha"])
+      if (!SHA.test(input.identity[field] ?? ""))
+        throw new Error("Malformed prepared review identity");
+    if (
+      ["headSha", "baseSha", "testedSha"].some(
+        (field) => input.identity[field] !== identity[field],
       )
     )
-      throw new Error("Latest review attempt is incomplete or failed");
+      continue;
+    if (!trustedRun(entry, REVIEW_WORKFLOW, repository, pr.base.sha, branch))
+      throw new Error(
+        `Latest PR review attempt failed (${entry.conclusion ?? entry.status}); rerun review or complete human review`,
+      );
+    if (input.key !== key)
+      throw new Error("Review policy changed; request a fresh review");
     if (input.status === "DUPLICATE") continue;
+    if (["DISABLED", "NEEDS_HUMAN", "ERROR", "BLOCK"].includes(input.status))
+      throw new Error(
+        `Dependency review ${input.status}: ${input.reason ?? "complete explicit human review or rerun after fixing evidence/setup"}`,
+      );
     const report = await jsonArtifact(
       client,
       entry.id,
@@ -339,13 +442,15 @@ export async function evaluate(
       "dependency-review-result",
       "report.json",
     );
+    if (report.status !== "PASS")
+      throw new Error(
+        `Dependency review ${report.status ?? "invalid"}: ${report.reason ?? "explicit human review or a fresh complete PASS is required"}`,
+      );
     assertReport(report, entry, identity, policy, key, JSON.parse(schemaText));
     return `Eligible dependency minor/patch or pin update; current CI ${ci.id} and Sol PASS ${entry.id}`;
   }
   throw new Error(
-    reviewRun
-      ? "No complete current PR review"
-      : "No current trusted review run",
+    "No complete current PR review; request a fresh dependency review",
   );
 }
 
@@ -366,18 +471,27 @@ export async function gate(directory, env = process.env) {
     throw new Error(
       "Trusted policy checkout is stale; rerun on current default branch",
     );
-  let prs;
-  if (env.GITHUB_EVENT_NAME === "workflow_dispatch") {
-    const number = Number(event.inputs.pr_number);
-    if (!Number.isSafeInteger(number) || number < 1)
-      throw new Error("Invalid PR number");
-    prs = [await client.api(`pulls/${number}`)];
-  } else if (event.pull_request)
-    prs = [await client.api(`pulls/${event.pull_request.number}`)];
-  else
-    prs = await client.pages(
-      `pulls?state=open&base=${encodeURIComponent(branch)}`,
+  // Old queued workflow definitions may check out the newly deployed scripts.
+  // They lack the per-PR matrix lock and must never remain status publishers.
+  if (
+    env.GITHUB_ACTIONS === "true" &&
+    env.PLAN_ONLY !== "true" &&
+    !env.TARGET_PR
+  )
+    throw new Error(
+      "Obsolete workflow lacks the per-PR publication lock; rerun the current workflow",
     );
+  const targets = env.TARGET_PR
+    ? [Number(env.TARGET_PR)]
+    : await eventTargets(client, repository, branch, env, event, env.GH_TOKEN);
+  if (targets.some((number) => !Number.isSafeInteger(number) || number < 1))
+    throw new Error("Invalid resolved PR number");
+  if (env.PLAN_ONLY === "true") {
+    appendFileSync(env.GITHUB_OUTPUT, `prs=${JSON.stringify(targets)}\n`);
+    return [];
+  }
+  const prs = [];
+  for (const number of targets) prs.push(await client.api(`pulls/${number}`));
   const decisions = [];
   for (const pr of prs) {
     if (pr.state !== "open" || pr.base.ref !== branch) continue;
@@ -389,8 +503,31 @@ export async function gate(directory, env = process.env) {
         [pr.head.sha, pr.merge_commit_sha].filter((sha) => SHA.test(sha ?? "")),
       ),
     ];
-    const status = async (state, description) => {
-      for (const sha of revisions)
+    const fresh = async () => {
+      const latest = await client.api(`pulls/${pr.number}`);
+      const latestBase = (
+        await client.api(`branches/${encodeURIComponent(branch)}`)
+      ).commit.sha;
+      if (
+        latest.state !== "open" ||
+        latest.draft !== pr.draft ||
+        latest.head.sha !== pr.head.sha ||
+        latest.base.sha !== pr.base.sha ||
+        latest.merge_commit_sha !== pr.merge_commit_sha ||
+        latestBase !== base
+      )
+        throw new ObsoleteEvaluation(
+          "Revision changed during evaluation; obsolete status publication skipped",
+        );
+    };
+    const guards = [];
+    const status = async (state, description, checkEvidence = false) => {
+      // Every publisher (including base/bulk refreshes) holds the same per-PR
+      // Actions concurrency lock. Check freshness before EACH head/merge write,
+      // including failures and pending; an old base must never touch a new head.
+      for (const sha of revisions) {
+        if (checkEvidence) for (const guard of guards) await guard();
+        await fresh();
         await client.api(`statuses/${sha}`, {
           method: "POST",
           body: {
@@ -400,14 +537,15 @@ export async function gate(directory, env = process.env) {
             target_url: `https://github.com/${repository}/actions/runs/${env.GITHUB_RUN_ID}`,
           },
         });
+      }
     };
-    await status(
-      "pending",
-      "Checking dependency applicability for current revisions",
-    );
     let state = "failure";
     let reason;
     try {
+      await status(
+        "pending",
+        "Checking dependency applicability for current revisions",
+      );
       if (pr.draft || pr.base.sha !== base)
         throw new Error("Draft PR or stale base revision");
       reason = await evaluate(
@@ -419,28 +557,30 @@ export async function gate(directory, env = process.env) {
         env,
         event,
         directory,
+        guards,
       );
-      const latest = await client.api(`pulls/${pr.number}`);
-      const latestBase = (
-        await client.api(`branches/${encodeURIComponent(branch)}`)
-      ).commit.sha;
-      if (
-        latest.state !== "open" ||
-        latest.draft ||
-        latest.head.sha !== pr.head.sha ||
-        latest.base.sha !== base ||
-        latest.merge_commit_sha !== pr.merge_commit_sha ||
-        latestBase !== base
-      )
-        throw new Error(
-          "Revision changed during evaluation; rerun CI and approval",
-        );
+      await fresh();
       state = "success";
     } catch (error) {
       if (error instanceof WaitingForCI) state = "pending";
       reason = error.message;
     }
-    await status(state, reason);
+    try {
+      await status(state, reason, true);
+    } catch (error) {
+      if (!(error instanceof ObsoleteEvaluation)) throw error;
+      console.log(`PR #${pr.number}: obsolete evaluation skipped`);
+      appendFileSync(
+        env.GITHUB_STEP_SUMMARY,
+        `PR #${pr.number}: obsolete evaluation skipped; current revision activity will reevaluate.\n`,
+      );
+      decisions.push({
+        prNumber: pr.number,
+        state: "obsolete",
+        reason: error.message,
+      });
+      continue;
+    }
     const message = `PR #${pr.number}: ${state} — ${safe(reason)}`;
     console.log(message);
     if (state !== "success")
@@ -451,7 +591,7 @@ export async function gate(directory, env = process.env) {
       state === "failure"
         ? `After resolving any CI/evidence failures and personally reviewing this exact revision, a write-authorized human can approve through [Evaluate dependency merge policy](https://github.com/${repository}/actions/workflows/dependency-merge-policy.yml) on \`${branch}\`, with \`pr_number=${pr.number}\`, \`approve=true\`, \`expected_head=${pr.head.sha}\`, and \`expected_base=${pr.base.sha}\`. Human approval does not waive CI or repository protection.\n\n`
         : state === "pending"
-          ? "The evaluator finished; the required Dependency merge policy status remains pending and blocks merging until current CI completes. CI completion triggers a fresh evaluation.\n\n"
+          ? "The evaluator finished; the required Dependency merge policy status remains pending and blocks merging until current CI/review completes. Completion triggers a fresh evaluation.\n\n"
           : "";
     appendFileSync(
       env.GITHUB_STEP_SUMMARY,
