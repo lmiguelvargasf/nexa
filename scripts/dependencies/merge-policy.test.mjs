@@ -196,6 +196,7 @@ function fixture(
     },
   };
   const env = {
+    GITHUB_ACTIONS: "false",
     GITHUB_REPOSITORY: repository,
     GITHUB_EVENT_PATH: join(directory, "event.json"),
     GITHUB_EVENT_NAME: "workflow_dispatch",
