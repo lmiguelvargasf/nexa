@@ -20,12 +20,6 @@
       "skillPath": "skills/github-issues/SKILL.md",
       "computedHash": "3eb6f99553920d6d94e47cb9e31432b10e2a6a235d9fc972165ec824a71ba0e9"
     },
-    "next-best-practices": {
-      "source": "vercel/nextjs-skills",
-      "sourceType": "github",
-      "skillPath": "skills/next-best-practices/SKILL.md",
-      "computedHash": "923cf68cb8f4ce917d81744b78b93ff586d3146b6c96dacfef797237b4897f16"
-    },
     "playwright": {
       "source": "openai/skills",
       "sourceType": "github",

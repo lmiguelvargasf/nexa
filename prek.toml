@@ -16,11 +16,11 @@ hooks = [
   { id = "check-yaml" },
   { id = "destroyed-symlinks" },
   { id = "detect-private-key" },
-  # Keep the vendored github-issues skill byte-for-byte identical to upstream.
-  { id = "end-of-file-fixer", exclude = '^\.agents/(skills/github-issues/|licenses/github-awesome-copilot-LICENSE$)' },
-  { id = "fix-byte-order-marker", exclude = '^\.agents/(skills/github-issues/|licenses/github-awesome-copilot-LICENSE$)' },
-  { id = "mixed-line-ending", args = ["--fix=lf"], exclude = '^\.agents/(skills/github-issues/|licenses/github-awesome-copilot-LICENSE$)' },
-  { id = "trailing-whitespace", args = ["--markdown-linebreak-ext=md"], exclude = '^\.agents/(skills/github-issues/|licenses/github-awesome-copilot-LICENSE$)' },
+  # Preserve vendored skill and attribution bytes; validate them against upstream.
+  { id = "end-of-file-fixer", exclude = '^\.agents/(skills/|licenses/)' },
+  { id = "fix-byte-order-marker", exclude = '^\.agents/(skills/|licenses/)' },
+  { id = "mixed-line-ending", args = ["--fix=lf"], exclude = '^\.agents/(skills/|licenses/)' },
+  { id = "trailing-whitespace", args = ["--markdown-linebreak-ext=md"], exclude = '^\.agents/(skills/|licenses/)' },
 ]
 
 [[repos]]
