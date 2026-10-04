@@ -321,7 +321,7 @@ test("automatic mode requires independently verified helper changes, current CI 
   withFixture(t, true, async (f, run) => {
     const status = await run();
     assert.equal(status.state, "success");
-    assert.match(status.description, /Eligible helper patch/);
+    assert.match(status.description, /Eligible helper minor\/patch update/);
     assert.equal(status.context, "Dependency merge policy");
     assert.equal(existsSync(join(f.directory, "MUST_NOT_EXECUTE")), false);
     assert.ok(
@@ -330,6 +330,33 @@ test("automatic mode requires independently verified helper changes, current CI 
         .every((entry) => entry.path.startsWith("/statuses/")),
     );
   }));
+
+test("helper minor updates still require current complete trusted PASS and successful CI", async (t) =>
+  withFixture(
+    t,
+    true,
+    async (f, run) => {
+      assert.equal((await run()).state, "success");
+      const valid = structuredClone(f.report);
+      for (const change of [
+        { status: "BLOCK" },
+        { status: "ERROR" },
+        { complete: false },
+        { key: "old-policy-review" },
+        { identity: { ...valid.identity, headSha: "f".repeat(40) } },
+      ]) {
+        f.report = { ...valid, ...change };
+        assert.equal((await run()).state, "failure");
+      }
+      f.report = valid;
+      f.ciRuns[0].conclusion = "failure";
+      assert.equal((await run()).state, "failure");
+    },
+    (manifest, lock) => {
+      manifest.dependencies.clsx = "^2.2.0";
+      lock.packages.clsx[0] = "clsx@2.2.0";
+    },
+  ));
 
 test("the runtime kill switch blocks an activated policy without human approval", async (t) =>
   withFixture(t, true, async (f, run) => {

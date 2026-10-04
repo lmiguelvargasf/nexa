@@ -1,11 +1,12 @@
 # Dependency updates
 
 Renovate prepares updates; CI validates them; a bounded Sol review assesses
-compatibility. Automatic merging is enabled only for stable patch updates to
-`clsx` and `tailwind-merge`, following the owner's October 3 activation decision.
+compatibility. Automatic merging is enabled only for stable minor and patch
+updates to `clsx` and `tailwind-merge`, following the owner's October 3 decision.
 The trusted merge gate independently requires eligibility, current applicable CI,
 and a complete current-policy Sol `PASS`. Other updates require human approval.
-Global Renovate `automerge` remains false; only the helper patch rule enables it.
+Global Renovate `automerge` remains false; only the helper minor/patch rule
+enables it.
 GitHub repository auto-merge and `DEPENDENCY_AUTOMERGE_ENABLED=true` must also be
 set in the destination repository. A copied configuration alone does not activate
 merging. A real eligible native automatic merge has not yet been demonstrated.
@@ -21,11 +22,21 @@ detected vulnerability PRs may bypass that cap and the weekly schedule.
 The configuration supports Bun manifests/lockfiles, mise pins/lockfiles, and
 GitHub Actions, including digest pinning. Related React/Next.js, AI SDK, email,
 Node, and Bun declarations are grouped. Major upgrades stay separate. Only
-`clsx` and `tailwind-merge` stable patches can qualify for automatic merging;
-their classification alone is not approval. Other file changes, mixed/protected
-updates, 0.x/prerelease/minor/major
-updates, changed scripts/trust/overrides, inconsistent lockfiles, and transitive
-changes require a human.
+`clsx` and `tailwind-merge` stable minor/patch updates can qualify for automatic
+merging; their classification alone is not approval. Other file changes,
+mixed/protected updates, 0.x/prerelease/major updates, changed scripts/trust/overrides,
+inconsistent lockfiles, and transitive changes require a human.
+
+The trusted gate supports stable exact, caret and tilde declarations, preserving
+that operator while increasing the minimum version within the same major (at
+least 1). Each locked version must satisfy its own declaration: exact means the
+same version, caret allows later versions in that major, and tilde allows later
+patches in that minor. Actual resolved versions must not downgrade or cross a
+major. Declaration-only updates qualify when the installed package entry is
+identical; a changed integrity/source/metadata entry at the same version requires
+a human. The gate checks every changed helper and keeps unrelated/transitive
+lockfile changes manual. Policy version 2 invalidates previous review identities;
+obtain fresh current CI and Sol review after deployment.
 
 Before accepting onboarding, verify a real Bun update changes both `package.json`
 and `bun.lock` and a real tool update keeps `packageManager`/`engines`, `mise.toml`,
@@ -182,7 +193,7 @@ As of October 3, 2026:
 - Repeating an unchanged review identity skipped the model job, demonstrating the
   duplicate-review guard. Authorized human completion and rejection of stale
   approval were also demonstrated.
-- The owner approved stable helper patch activation. A naturally occurring eligible
+- The owner approved stable helper activation. A naturally occurring eligible
   native automatic merge, fresh resolved upgrades, and hosted mise lockfile
   synchronization remain to be demonstrated.
 
@@ -261,14 +272,14 @@ requires an intentional rerun. No review database is introduced.
    workflow would deadlock its own implementation PR.
 3. Assess and record actual Renovate PRs and Sol outcomes/costs. Record the
    maintainer's explicit activation decision. Fixtures and a dashboard are not a
-   completed pilot. No eligible helper patch currently appears in Nexa's dashboard;
-   do not invent an update or widen eligibility just to demonstrate merging.
+   completed pilot. Use a naturally occurring eligible update; do not invent one
+   or widen the package allowlist just to demonstrate merging.
 4. In a reviewed configuration PR, set policy `mode: "automatic"` and
    `automaticMerging: true`, and add
    `automerge: true` plus `automergeType: "pr"` **only** to the existing stable
-   helpers patch rule in `renovate.json`. Keep global `automerge: false`,
+   helpers minor/patch rule in `renovate.json`. Keep global `automerge: false`,
    `platformAutomerge: true`, and `rebaseWhen: "behind-base-branch"`. Keep security,
-   minor/major, and protected update rules manual. The gate still evaluates all
+   major and protected update rules manual. The gate still evaluates all
    actual file/dependency changes, regardless of Renovate's classification.
 5. Verify both required statuses and strict rules, enable GitHub repository
    auto-merge, then set `DEPENDENCY_AUTOMERGE_ENABLED=true`. Obtain a fresh current

@@ -169,7 +169,7 @@ test("only same-repository Renovate with current tested head/base is trusted", (
   );
 });
 
-test("stable helper patches qualify only with consistent source, declarations and isolated lock changes", () => {
+test("stable helpers qualify only with consistent source, declarations and isolated lock changes", () => {
   assert.equal(helperEligibility(fixture(), ["clsx"]).candidate, true);
   for (const mutate of [
     (f) => {
@@ -204,7 +204,7 @@ test("stable helper patches qualify only with consistent source, declarations an
       f.newLock.packages.clsx[3] = "bad-integrity";
     },
     (f) => {
-      f.newLock.packages.clsx[0] = "clsx@2.1.9";
+      f.newLock.packages.clsx[0] = "clsx@3.0.0";
     },
   ]) {
     const f = fixture();
@@ -213,13 +213,114 @@ test("stable helper patches qualify only with consistent source, declarations an
   }
 });
 
-test("minor, major, prerelease, 0.x, range changes and grouped protected changes require humans", () => {
+test("stable helper minor/patch declarations accept valid exact, caret and tilde resolutions", () => {
+  for (const [before, after, oldVersion, newVersion] of [
+    ["^2.1.0", "^2.2.0", "2.1.5", "2.2.0"],
+    ["^2.9.9", "^2.10.0", "2.9.9", "2.10.0"],
+    ["^2.1.0", "^2.1.1", "2.1.5", "2.1.9"],
+    ["^2.1.0", "^2.1.1", "2.1.0", "2.2.0"],
+    ["~2.1.0", "~2.2.0", "2.1.5", "2.2.3"],
+    ["~2.1.0", "~2.1.1", "2.1.5", "2.1.5"],
+    ["2.1.0", "2.2.0", "2.1.0", "2.2.0"],
+    ["^2.1.0", "^2.2.0", "2.3.0", "2.3.0"],
+  ]) {
+    const f = fixture();
+    f.before.dependencies.clsx = before;
+    f.after.dependencies.clsx = after;
+    f.oldLock.packages.clsx = entry("clsx", oldVersion);
+    f.newLock.packages.clsx = entry("clsx", newVersion);
+    assert.equal(helperEligibility(f, ["clsx"]).candidate, true);
+  }
+});
+
+test("declaration-only tailwind minor updates can qualify alongside helper patches", () => {
+  const f = fixture();
+  f.before.dependencies["tailwind-merge"] = "^3.6.0";
+  f.after.dependencies["tailwind-merge"] = "^3.7.0";
+  f.oldLock.packages["tailwind-merge"] = entry("tailwind-merge", "3.7.0");
+  f.newLock.packages["tailwind-merge"] = entry("tailwind-merge", "3.7.0");
+  assert.equal(
+    helperEligibility(f, ["clsx", "tailwind-merge"]).candidate,
+    true,
+  );
+});
+
+test("valid declaration-only Zod minor updates remain outside the helper allowlist", () => {
+  const f = fixture();
+  for (const manifest of [f.before, f.after]) delete manifest.dependencies.clsx;
+  for (const lock of [f.oldLock, f.newLock]) delete lock.packages.clsx;
+  f.before.dependencies.zod = "^4.4.3";
+  f.after.dependencies.zod = "^4.6.5";
+  f.oldLock.packages.zod = entry("zod", "4.6.5");
+  f.newLock.packages.zod = entry("zod", "4.6.5");
+  const result = helperEligibility(f, ["clsx", "tailwind-merge"]);
+  assert.equal(result.candidate, false);
+  assert.equal(result.reasons.length, 1);
+  assert.match(result.reasons[0], /zod: requires human review/);
+});
+
+test("out-of-range, unstable and downgraded resolutions remain manual", () => {
+  for (const [before, after, oldVersion, newVersion] of [
+    ["^2.1.0", "^2.2.0", "2.9.0", "2.2.0"],
+    ["^2.1.0", "^2.2.0", "2.1.0", "2.1.9"],
+    ["~2.1.0", "~2.1.1", "2.1.0", "2.2.0"],
+    ["~2.1.0", "~2.2.0", "2.2.0", "2.2.0"],
+    ["2.1.0", "2.1.1", "2.1.0", "2.1.2"],
+    ["^2.1.0", "^2.2.0", "2.1.0", "3.0.0"],
+    ["^2.1.0", "^2.2.0", "0.9.0", "2.2.0"],
+    ["^2.1.0", "^2.2.0", "2.1.0-beta.1", "2.2.0"],
+    ["^2.1.0", "^2.2.0", "2.1.0", "2.2.0-beta.1"],
+    ["^2.1.0", "^2.2.0", "2.1.0", "^2.2.0"],
+    ["^2.1.0", "^2.2.0", "2.1.0", "2.02.0"],
+    ["^2.1.0", "^2.2.0", "2.1.0", "2.2.0\n"],
+    ["^2.1.0", "^2.2.0", "2.1.0", "2.9007199254740992.0"],
+  ]) {
+    const f = fixture();
+    f.before.dependencies.clsx = before;
+    f.after.dependencies.clsx = after;
+    f.oldLock.packages.clsx = entry("clsx", oldVersion);
+    f.newLock.packages.clsx = entry("clsx", newVersion);
+    assert.equal(helperEligibility(f, ["clsx"]).candidate, false);
+  }
+});
+
+test("declaration-only updates reject changed same-version integrity and missing entries", () => {
+  for (const change of [
+    (f) => {
+      f.newLock.packages.clsx[3] = "sha512-ZGVm";
+    },
+    (f) => {
+      f.newLock.packages.clsx[3] = ["sha512-YWJj"];
+    },
+    (f) => {
+      delete f.oldLock.packages.clsx;
+    },
+    (f) => {
+      f.newLock.packages.clsx = null;
+    },
+    (f) => {
+      f.newLock.packages.clsx[0] = "other@2.2.0";
+    },
+  ]) {
+    const f = fixture();
+    f.after.dependencies.clsx = "^2.2.0";
+    f.oldLock.packages.clsx = entry("clsx", "2.2.0");
+    f.newLock.packages.clsx = entry("clsx", "2.2.0");
+    change(f);
+    assert.equal(helperEligibility(f, ["clsx"]).candidate, false);
+  }
+});
+
+test("major, prerelease, 0.x, downgrades, range changes and grouped protected changes require humans", () => {
   for (const [before, after] of [
-    ["^2.1.0", "^2.2.0"],
     ["^2.1.0", "^3.0.0"],
     ["^0.1.0", "^0.1.1"],
     ["^2.1.0", "^2.1.1-beta.1"],
     ["^2.1.0", "~2.1.1"],
+    ["^2.2.0", "^2.1.9"],
+    ["^2.1.0", "^2.01.1"],
+    ["^2.1.0", ["^2.1.1"]],
+    ["^2.1.0", "^2.9007199254740992.0"],
     ["^2.1.0", "^2.1.0"],
   ]) {
     const f = fixture();
@@ -303,13 +404,14 @@ test("review requires valid schema, complete evidence and exact revisions", () =
 });
 
 test("deduplication identity changes with base/head, model, effort or prompt", () => {
-  const baseline = { model: "gpt-6.1-sol", effort: "medium" };
+  const baseline = { version: 1, model: "gpt-6.1-sol", effort: "medium" };
   const key = reviewIdentity(identity, baseline, "prompt", schema, "config");
   for (const [id, policy, prompt] of [
     [{ ...identity, headSha: "d".repeat(40) }, baseline, "prompt"],
     [{ ...identity, baseSha: "d".repeat(40) }, baseline, "prompt"],
     [identity, { ...baseline, model: "other" }, "prompt"],
     [identity, { ...baseline, effort: "high" }, "prompt"],
+    [identity, { ...baseline, version: 2 }, "prompt"],
     [identity, baseline, "changed"],
   ])
     assert.notEqual(reviewIdentity(id, policy, prompt, schema, "config"), key);
