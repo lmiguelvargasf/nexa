@@ -17,7 +17,7 @@
 - Regenerate Supabase types: `task db:types`
 - Email preview: `task email:dev`
 - Runtime smoke check: `/api/health`
-- Publish an agent implementation PR: use the protected Briko publisher in `docs/agent-publication.md` with a completed PR-template body file.
+- Inspect publication mode/destination: `task agents:publication`; follow `docs/agent-publication.md` for the selected mode.
 - Create other templated PRs with the current human login: `task pr:create -- --title "..." --base main`
 
 ## Repo Map
@@ -64,8 +64,15 @@
 - Resume a matching implementation branch/PR without resetting existing work. For new work, fetch the intended base and create `issue/<number>-<short-description>` from current remote `main`, unless an explicit alternative base applies. Preserve unrelated local changes and exclude them from commits; use a separate worktree when necessary to avoid disturbing ongoing work.
 - Implement the agreed scope, add appropriate tests, and review the diff. Run `task verify`, or `task verify:all` (which includes `task verify`) when browser validation is relevant. Record exact commands and outcomes.
 - Fix introduced validation failures. If a required check remains failed or unavailable, report the blocker and incomplete validation instead of claiming completion or automatically substituting a draft PR.
-- After successful implementation and validation, commit the issue changes and publish them through the protected Briko App entry point in `docs/agent-publication.md`. Use a reviewed publisher copy outside the checkout; never load App credentials into tests, application code or PR reviewer sessions. Missing or incorrectly scoped App setup is a blocker: report it without falling back to the maintainer's login. Create or update a regular PR against the intended base. Complete every heading in `.github/pull_request_template.md`. Mark a reused draft ready when complete; reserve drafts for explicitly requested publication of unfinished work.
+- After successful implementation and validation, commit the issue changes and publish using the selected mode below and `docs/agent-publication.md`. Create or update a regular PR against the intended base. Complete every heading in `.github/pull_request_template.md`. Mark a reused draft ready when complete; reserve drafts for explicitly requested publication of unfinished work.
 - Use `Closes #<number>` only when the PR fully resolves the issue; use a related-issue reference for partial work. Verify the published PR's base/head, body, issue reference, and ready-for-review state, then return its URL with a concise implementation and validation summary. Leave merging and issue closure to the established review/merge process.
+
+## Publication Mode
+
+- Resolve the destination from this clone's origin and inspect `task agents:publication` before publishing. Clone-local `nexa.publication.*` Git settings select the mode; global/included settings are ignored. Template-derived repositories default to `github`, using their own authenticated Git/`gh` setup. Confirm the active account and preserve unrelated/human PRs; do not transfer authorship.
+- The canonical `lmiguelvargasf/nexa` repository explicitly requires `app` mode with the protected Briko publisher. If its local selection is absent, restore the documented App selection; do not publish as the maintainer. Other projects may explicitly select their own App, including the owner's Brikosi installation for repositories under the same personal account.
+- In `app` mode, use the selected reviewed publisher outside every checkout. Keep App keys/config outside version control, tests, application code and PR reviewer sessions. Missing/invalid mode, paths, credentials, identity or destination scope is a blocker; never fall back to `github` after App selection fails.
+- Commit author/committer identity is independent of publication mode; preserve accurate authorship and agent disclosures. Publisher selection does not make the App the commit author.
 
 ## Pull Requests
 
@@ -74,4 +81,4 @@
 - Include exact validation commands and outcomes, or state why validation was not run.
 - If using a GitHub connector or web UI instead of `gh`, manually build the PR body from `.github/pull_request_template.md`.
 - Do not rely on `gh pr create --fill` as the final PR body; it can skip the template details reviewers need.
-- Agent implementation publication uses scoped App authentication for Git and `gh`, preserving the maintainer's global login. Keep commit authorship and agent disclosure accurate; App PR authorship grants no approval or merge-policy exception.
+- Optional App publication uses scoped authentication for Git and `gh`, preserving the maintainer's global login. Both publication modes retain existing CI/review/merge protections; App authorship grants no approval or merge-policy exception.
