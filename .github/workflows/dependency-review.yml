@@ -35,11 +35,11 @@ jobs:
       policy_sha: ${{ steps.prepare.outputs.policy_sha }}
     steps:
       # workflow_run executes trusted default-branch code. Never check out the PR.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: true
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
         with:
           install_args: node
       - name: Verify CI identity and prepare bounded evidence
@@ -51,7 +51,7 @@ jobs:
           API_CONFIGURED: ${{ secrets.OPENAI_API_KEY != '' }}
       - name: Preserve prepared data or actionable setup failure
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: dependency-review-input
           path: |
@@ -70,14 +70,14 @@ jobs:
       group: dependency-review-pr-${{ needs.prepare.outputs.pr_number }}
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ needs.prepare.outputs.policy_sha }}
           persist-credentials: false
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
         with:
           install_args: node
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: dependency-review-input
           path: ${{ runner.temp }}/dependency-review
@@ -111,7 +111,7 @@ jobs:
           REVIEW_OUTCOME: ${{ steps.codex.outcome }}
       - name: Preserve sanitized advisory result
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: dependency-review-result
           path: |
@@ -130,21 +130,21 @@ jobs:
       actions: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ needs.prepare.outputs.policy_sha }}
           persist-credentials: false
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
         with:
           install_args: node
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: dependency-review-input
           path: ${{ runner.temp }}/dependency-review
       - name: Read finished result when available
         if: needs.review.result != 'skipped'
         continue-on-error: true
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: dependency-review-result
           path: ${{ runner.temp }}/dependency-review
