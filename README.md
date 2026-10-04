@@ -29,7 +29,9 @@ Nexa is a Next.js 16 App Router app for a modern full-stack product workflow. It
 
 ## Requirements
 
-- macOS or Linux.
+- macOS or GNU/Linux compatible with the pinned toolchain. The Linux lock uses
+  Node's official glibc artifacts; Alpine/musl environments need a separate tool
+  configuration. See [Node's supported platforms](https://github.com/nodejs/node/blob/v24.16.0/BUILDING.md#platform-list).
 - [Docker](https://docs.docker.com/get-started/get-docker/) for the local Supabase database.
 
 ## Initialize Locally
@@ -61,8 +63,9 @@ policy and templates. See [skill provenance and updates](docs/github-issues.md).
 
 ## Dependency Updates
 
-Renovate prepares weekly updates with CI and optional advisory Sol reviews.
-Merges stay manual during the supervised rollout. See
+Renovate prepares weekly updates. Eligible minor/patch updates merge automatically
+after current CI, complete Sol PASS and the required merge policy check. Major
+updates and changes requiring human review stay manual. See
 [setup, spending controls, and pilot](docs/dependency-updates.md).
 
 ## Project Skill Updates

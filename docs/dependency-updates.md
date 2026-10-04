@@ -57,7 +57,13 @@ comments. Workflow commands, permissions, inputs, conditions and structure stay
 unchanged. Exact upstream commits are resolved; an immutable digest must match
 its annotated version tag. Sol receives upstream release notes or bounded exact
 source comparisons plus workflow consumers. Missing/large source evidence
-requires a human rather than a partial paid review. Policy version 4 invalidates
+requires a human rather than a partial paid review. Tool review uses complete
+old-to-new sections from `CHANGELOG.md` at the verified upstream commit, with an
+exact bounded source comparison fallback when that changelog is unavailable.
+Latest-release notes alone cannot establish a multi-release tool upgrade.
+Tool setup, locked platform sources and hook consumers are included as evidence;
+CI installs locked prek and runs hooks, failing on errors or tracked mutations.
+Policy version 5 invalidates
 old reviews; obtain fresh current CI and Sol PASS after deployment.
 
 Before accepting onboarding, verify a real Bun update changes both `package.json`
@@ -161,7 +167,7 @@ exact identities; `PASS` requires no findings or uncertainties. It remains advis
 
 ## Usage, limits, and reruns
 
-The bundle limit is 64 KiB, at most five distinct declared dependency transitions, 12 KiB per release
+The bundle limit is 96 KiB, at most five distinct declared dependency transitions, 24 KiB per release
 source, and an 8 KiB validated response. Review jobs have a ten-minute timeout and
 one active job per PR, cancelling obsolete work. Previously reported identities
 are not automatically reviewed again. Identity includes head, base, tested merge,

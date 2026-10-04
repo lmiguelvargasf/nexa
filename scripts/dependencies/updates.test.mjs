@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { upstreamEvidence } from "./github.mjs";
+import { changelogRange, upstreamEvidence } from "./github.mjs";
 import { bunEligibility, satisfies, version } from "./policy.mjs";
 import { actionReferences, inspectUpdates } from "./updates.mjs";
 
@@ -190,6 +190,37 @@ function assetSnapshot() {
   return snapshot;
 }
 
+function changelogSource(notes, before = "0.4.3", after = "0.4.14") {
+  const content = `## ${after}\n\n${notes}\n\n## ${before}\n\nOld release\n`;
+  return {
+    type: "file",
+    path: "CHANGELOG.md",
+    encoding: "base64",
+    sha: "c".repeat(40),
+    size: Buffer.byteLength(content),
+    content: Buffer.from(content).toString("base64"),
+  };
+}
+
+test("tool changelog includes whole intervening sections with exact ordered boundaries", () => {
+  const content =
+    "## Unreleased\nFuture\n## [v0.4.14]\nLatest\n## 0.4.9\nCache reset\n```yaml\nexample: complete\n```\n## 0.4.4\nCLI changes\n## 0.4.3\nOld\n";
+  const result = changelogRange(content, "0.4.3", "0.4.14");
+  assert.deepEqual(result.versions, ["0.4.14", "0.4.9", "0.4.4"]);
+  assert.match(result.notes, /Cache reset/);
+  assert.match(result.notes, /example: complete/);
+  assert.doesNotMatch(result.notes, /Future|Old/);
+  for (const invalid of [
+    content.replace("## 0.4.3", "## 0.4.2"),
+    content.replace("## [v0.4.14]", "## 0.4.15"),
+    content.replace("## 0.4.9", "## 0.4.14"),
+    content.replace("## 0.4.9", "## 0.4.15"),
+    content.replace("## 0.4.9", "## 0.4.9-beta"),
+    "## 0.4.3\nOld\n## 0.4.14\nNew",
+  ])
+    assert.throws(() => changelogRange(invalid, "0.4.3", "0.4.14"));
+});
+
 test("real generated mise lock accepts canonical asset API metadata on every platform", () => {
   assert.deepEqual(inspectUpdates(assetSnapshot()).reasons, []);
   assert.equal(inspectUpdates(assetSnapshot()).candidate, true);
@@ -255,6 +286,8 @@ test("asset preparation verifies all locked URLs and published digests before ap
   const api = async (path) => {
     if (path.startsWith("commits/"))
       return { sha: path.endsWith("v0.4.3") ? "a".repeat(40) : "b".repeat(40) };
+    if (path.startsWith("contents/"))
+      return changelogSource("Tool release notes");
     if (path.startsWith("releases/assets/")) {
       const platform = platforms.find((entry) => entry.url_api.endsWith(path));
       return {
@@ -316,8 +349,8 @@ test("asset preparation verifies all locked URLs and published digests before ap
     upstreamEvidence(change, 2000, () => ({
       api: async (path) => {
         const value = await api(path);
-        return path.startsWith("releases/tags/")
-          ? { ...value, body: "x".repeat(1500) }
+        return path.startsWith("contents/")
+          ? changelogSource("x".repeat(1500))
           : value;
       },
     })),
@@ -402,19 +435,88 @@ test("tool evidence uses exact commits and complete bounded release/source data"
     repository: "j178/prek",
     oldRef: "v0.4.3",
     newRef: "v0.5.4",
+    before: "0.4.3",
+    after: "0.5.4",
   };
   const client = () => ({
     api: async (path) =>
       path.startsWith("commits/")
         ? { sha: path.endsWith("v0.4.3") ? "a".repeat(40) : "b".repeat(40) }
-        : {
-            body: "CLI release behavior changes",
-            html_url: "https://github.com/j178/prek/releases/tag/v0.5.4",
-          },
+        : path.startsWith("contents/")
+          ? changelogSource("CLI release behavior changes", "0.4.3", "0.5.4")
+          : {
+              body: "CLI release behavior changes",
+              html_url: "https://github.com/j178/prek/releases/tag/v0.5.4",
+            },
   });
   assert.match(
     (await upstreamEvidence(change, 12000, client)).notes,
     /behavior changes/,
   );
   await assert.rejects(upstreamEvidence(change, 2, client), /context limit/);
+  for (const invalid of [
+    { path: "other.md" },
+    { encoding: "utf8" },
+    { sha: "bad" },
+    { size: 1 },
+    changelogSource("Missing old boundary", "0.4.2", "0.5.4"),
+  ])
+    await assert.rejects(
+      upstreamEvidence(change, 12000, () => ({
+        api: async (path) => {
+          const value = await client().api(path);
+          return path.startsWith("contents/")
+            ? { ...value, ...invalid }
+            : value;
+        },
+      })),
+    );
+});
+
+test("missing tool changelog requires a complete source comparison, never latest-only approval", async () => {
+  const change = {
+    manager: "mise",
+    name: "prek",
+    repository: "j178/prek",
+    before: "0.4.3",
+    after: "0.4.14",
+    oldRef: "v0.4.3",
+    newRef: "v0.4.14",
+  };
+  const api = async (path) => {
+    if (path.startsWith("commits/"))
+      return { sha: path.endsWith("v0.4.3") ? "a".repeat(40) : "b".repeat(40) };
+    if (path.startsWith("contents/"))
+      throw new Error("Evidence request returned HTTP 404");
+    if (path.startsWith("releases/"))
+      return {
+        body: "Only latest changes",
+        html_url: "https://github.com/j178/prek/releases/tag/v0.4.14",
+      };
+    return {
+      status: "ahead",
+      total_commits: 1,
+      commits: [{ sha: "b".repeat(40) }],
+      files: [
+        {
+          filename: "cli.rs",
+          status: "modified",
+          patch: "complete source change",
+        },
+      ],
+      html_url: "comparison",
+    };
+  };
+  const evidence = await upstreamEvidence(change, 12000, () => ({ api }));
+  assert.match(evidence.files[0].patch, /complete/);
+  assert.equal(evidence.notes, undefined);
+  await assert.rejects(
+    upstreamEvidence(change, 12000, () => ({
+      api: async (path) =>
+        path.startsWith("compare/")
+          ? { ...(await api(path)), total_commits: 2 }
+          : api(path),
+    })),
+    /incomplete/,
+  );
 });

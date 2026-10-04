@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { compareVersions, version } from "./policy.mjs";
 import { toolPlatforms } from "./updates.mjs";
 
 export function repositoryName(value) {
@@ -306,6 +307,42 @@ export async function upstreamEvidence(
         throw new Error(
           "Upstream release is draft or prerelease; human review required",
         );
+      if (change.manager === "mise") {
+        const source = await client.api(
+          `contents/CHANGELOG.md?ref=${next.sha}`,
+          { maxBytes: 524_288 },
+        );
+        if (
+          source.type !== "file" ||
+          source.path !== "CHANGELOG.md" ||
+          source.encoding !== "base64" ||
+          !/^[a-f0-9]{40}$/.test(source.sha ?? "") ||
+          typeof source.content !== "string"
+        )
+          throw new Error("Invalid versioned tool changelog identity");
+        const content = Buffer.from(source.content, "base64");
+        if (content.length > 262_144 || content.length !== source.size)
+          throw new Error("Tool changelog is incomplete or too large");
+        const range = changelogRange(
+          content.toString("utf8"),
+          change.before,
+          change.after,
+        );
+        const result = {
+          ...identity,
+          releaseUrl: release.html_url,
+          tag,
+          changelog: {
+            url: `https://github.com/${change.repository}/blob/${next.sha}/CHANGELOG.md`,
+            blobSha: source.sha,
+            coveredVersions: range.versions,
+          },
+          notes: range.notes,
+        };
+        if (Buffer.byteLength(JSON.stringify(result)) > maxBytes)
+          throw new Error("Tool changelog evidence exceeds the context limit");
+        return result;
+      }
       if (release.body?.trim()) {
         if (Buffer.byteLength(release.body) > maxBytes)
           throw new Error("Release notes exceed the context limit");
@@ -348,6 +385,30 @@ export async function upstreamEvidence(
   if (Buffer.byteLength(JSON.stringify(result)) > maxBytes)
     throw new Error("Upstream source exceeds the context limit");
   return result;
+}
+
+export function changelogRange(content, before, after) {
+  const headings = [
+    ...content.matchAll(/^##[ \t]+\[?v?(\d+\.\d+\.\d+)(?=[\]\s]|$)[^\r\n]*$/gm),
+  ];
+  const start = headings.filter((entry) => entry[1] === after);
+  const end = headings.filter((entry) => entry[1] === before);
+  if (start.length !== 1 || end.length !== 1 || start[0].index >= end[0].index)
+    throw new Error("Tool changelog lacks unique ordered version boundaries");
+  const entries = headings.filter(
+    (entry) => entry.index >= start[0].index && entry.index <= end[0].index,
+  );
+  for (let i = 1; i < entries.length; i++) {
+    if (
+      compareVersions(version(entries[i - 1][1]), version(entries[i][1])) <= 0
+    )
+      throw new Error("Tool changelog versions are not strictly descending");
+  }
+  const notes = content.slice(start[0].index, end[0].index).trim();
+  // Include whole sections, including all intermediate prose/code blocks.
+  if (/^##[ \t]+\[?v?\d+\.\d+\.\d+-/m.test(notes))
+    throw new Error("Tool changelog range contains a prerelease section");
+  return { notes, versions: entries.slice(0, -1).map((entry) => entry[1]) };
 }
 
 export function readJson(path) {
