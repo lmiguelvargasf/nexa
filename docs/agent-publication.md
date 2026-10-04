@@ -205,6 +205,16 @@ hosted CI/review evidence are recorded in the implementation PR; unavailable
 registration or credentials means **incomplete integration validation**, even
 when the fixtures pass.
 
+The first live implementation is [PR #60](https://github.com/lmiguelvargasf/nexa/pull/60).
+Creation verified author `brikosi[bot]`, base `main`, the intended issue branch,
+all PR-template headings and a regular PR. An identical publication reused that
+PR without creating a second PR or report. The existing
+[CI run at creation](https://github.com/lmiguelvargasf/nexa/actions/runs/37209371548)
+started automatically. In the maintainer's signed-in GitHub review dialog,
+**Approve** was enabled; the dialog was cancelled without submitting a review.
+Subsequent update/CI outcomes are recorded in the current Brikosi validation
+report comment on that PR. No approval or merge was performed during setup.
+
 References: [App installation authentication](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/authenticating-as-a-github-app-installation),
 [token creation and expiration](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app),
 [App permissions](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app).
