@@ -140,7 +140,13 @@ tasks:
       - task: test:run
       - task: skills:test
       - task: dependencies:test
+      - task: agents:test
       - task: build
+
+  agents:test:
+    desc: Test App publication identity, destinations, isolation and recovery
+    cmds:
+      - mise exec -- node --test scripts/agents/*.test.mjs
 
   skills:test:
     desc: Test skill update preparation and publication with isolated fixtures

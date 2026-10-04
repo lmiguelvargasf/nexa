@@ -17,7 +17,8 @@
 - Regenerate Supabase types: `task db:types`
 - Email preview: `task email:dev`
 - Runtime smoke check: `/api/health`
-- Create a templated PR: `task pr:create -- --title "..." --base main`
+- Publish an agent implementation PR: use the protected Briko publisher in `docs/agent-publication.md` with a completed PR-template body file.
+- Create other templated PRs with the current human login: `task pr:create -- --title "..." --base main`
 
 ## Repo Map
 
@@ -63,7 +64,7 @@
 - Resume a matching implementation branch/PR without resetting existing work. For new work, fetch the intended base and create `issue/<number>-<short-description>` from current remote `main`, unless an explicit alternative base applies. Preserve unrelated local changes and exclude them from commits; use a separate worktree when necessary to avoid disturbing ongoing work.
 - Implement the agreed scope, add appropriate tests, and review the diff. Run `task verify`, or `task verify:all` (which includes `task verify`) when browser validation is relevant. Record exact commands and outcomes.
 - Fix introduced validation failures. If a required check remains failed or unavailable, report the blocker and incomplete validation instead of claiming completion or automatically substituting a draft PR.
-- After successful implementation and validation, commit and push the issue changes, then create or update a regular PR against the intended base. Complete every heading in `.github/pull_request_template.md`; the PR helper selects the template but does not fill it. Mark a reused draft ready when complete; reserve drafts for explicitly requested publication of unfinished work.
+- After successful implementation and validation, commit the issue changes and publish them through the protected Briko App entry point in `docs/agent-publication.md`. Use a reviewed publisher copy outside the checkout; never load App credentials into tests, application code or PR reviewer sessions. Missing or incorrectly scoped App setup is a blocker: report it without falling back to the maintainer's login. Create or update a regular PR against the intended base. Complete every heading in `.github/pull_request_template.md`. Mark a reused draft ready when complete; reserve drafts for explicitly requested publication of unfinished work.
 - Use `Closes #<number>` only when the PR fully resolves the issue; use a related-issue reference for partial work. Verify the published PR's base/head, body, issue reference, and ready-for-review state, then return its URL with a concise implementation and validation summary. Leave merging and issue closure to the established review/merge process.
 
 ## Pull Requests
@@ -73,3 +74,4 @@
 - Include exact validation commands and outcomes, or state why validation was not run.
 - If using a GitHub connector or web UI instead of `gh`, manually build the PR body from `.github/pull_request_template.md`.
 - Do not rely on `gh pr create --fill` as the final PR body; it can skip the template details reviewers need.
+- Agent implementation publication uses scoped App authentication for Git and `gh`, preserving the maintainer's global login. Keep commit authorship and agent disclosure accurate; App PR authorship grants no approval or merge-policy exception.
