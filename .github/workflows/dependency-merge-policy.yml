@@ -5,7 +5,8 @@ on:
     types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft]
   workflow_run:
     workflows: [CI, Dependency review]
-    types: [completed, requested]
+    # requested does not fire for reruns; refresh the status when they start too.
+    types: [completed, requested, in_progress]
   push:
     branches: [main]
   workflow_dispatch:

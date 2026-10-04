@@ -33,6 +33,8 @@ const safe = (text) =>
     .replace(/[\p{Cc}<>]/gu, " ")
     .slice(0, 1000);
 
+class WaitingForCI extends Error {}
+
 export function trustedRun(run, path, repository, baseSha, branch) {
   return (
     run.path === path &&
@@ -102,13 +104,22 @@ export async function currentCI(client, pr, repository, token) {
       entry.head_repository?.full_name === pr.head.repo.full_name &&
       [pr.head.sha, pr.merge_commit_sha].includes(entry.head_sha),
   );
-  if (
-    run?.path !== ".github/workflows/ci.yml" ||
-    run.status !== "completed" ||
-    run.conclusion !== "success"
-  )
+  if (!run) throw new WaitingForCI("Waiting for current-revision CI to start");
+  if (run.path !== ".github/workflows/ci.yml")
     throw new Error(
-      "Latest current-revision CI is missing, running, or failed",
+      "Latest current-revision CI has an unexpected workflow path",
+    );
+  if (
+    ["requested", "queued", "pending", "waiting", "in_progress"].includes(
+      run.status,
+    )
+  )
+    throw new WaitingForCI(
+      `Waiting for current-revision CI to finish (${run.status})`,
+    );
+  if (run.status !== "completed" || run.conclusion !== "success")
+    throw new Error(
+      `Latest current-revision CI did not succeed (${run.conclusion ?? run.status ?? "unknown"})`,
     );
   const identity = await validationIdentity(client, run.id, token, repository);
   const commit = await client.api(`commits/${identity.testedSha}`);
@@ -413,6 +424,7 @@ export async function gate(directory, env = process.env) {
         );
       state = "success";
     } catch (error) {
+      if (error instanceof WaitingForCI) state = "pending";
       reason = error.message;
     }
     await status(state, reason);

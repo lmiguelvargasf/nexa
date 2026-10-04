@@ -410,9 +410,117 @@ test("supervised/default mode and the independent kill switch cannot use an AI P
     assert.equal((await run()).state, "failure");
   }));
 
-test("latest failed, missing, cancelled and skipped-required CI blocks without falling back", async (t) =>
+test("missing current CI stays pending without approving automatic or human completion", async (t) => {
+  for (const automatic of [false, true]) {
+    await withFixture(t, automatic, async (f, run) => {
+      f.event.inputs.approve = automatic ? "false" : "true";
+      const oldRun = { ...f.ciRuns[0], head_sha: "e".repeat(40) };
+      for (const candidates of [[], [oldRun]]) {
+        f.ciRuns = candidates;
+        const status = await run();
+        assert.equal(status.state, "pending");
+        assert.match(
+          status.description,
+          /Waiting for current-revision CI to start/,
+        );
+        assert.equal(
+          existsSync(join(f.directory, "approval/approval.json")),
+          false,
+        );
+      }
+      assert.ok(f.statuses.every((status) => status.state === "pending"));
+      assert.ok(
+        !f.requests.some((request) => request.path.endsWith("/artifacts")),
+      );
+    });
+  }
+});
+
+test("newer active CI stays pending on both revisions despite an older successful run", async (t) =>
   withFixture(t, true, async (f, run) => {
-    for (const conclusion of ["failure", "cancelled", "skipped", null]) {
+    for (const state of [
+      "requested",
+      "queued",
+      "pending",
+      "waiting",
+      "in_progress",
+    ]) {
+      f.ciRuns.unshift({
+        ...f.ciRuns[0],
+        id: 124,
+        status: state,
+        conclusion: null,
+      });
+      const status = await run();
+      assert.equal(status.state, "pending");
+      assert.equal(
+        status.description,
+        `Waiting for current-revision CI to finish (${state})`,
+      );
+      assert.ok(
+        f.statuses
+          .slice(-2)
+          .every(
+            (entry) =>
+              entry.state === "pending" &&
+              entry.context === "Dependency merge policy",
+          ),
+      );
+      assert.deepEqual(
+        f.requests
+          .filter((request) => request.method === "POST")
+          .slice(-2)
+          .map((request) => request.path),
+        [`/statuses/${f.pr.head.sha}`, `/statuses/${f.pr.merge_commit_sha}`],
+      );
+      f.ciRuns.shift();
+    }
+    assert.ok(
+      !f.requests.some((request) => request.path.endsWith("/artifacts")),
+    );
+    assert.match(
+      readFileSync(f.env.GITHUB_STEP_SUMMARY, "utf8"),
+      /\*\*pending\*\* — Waiting for current-revision CI/,
+    );
+    assert.equal((await run()).state, "success");
+  }));
+
+test("a failed CI rerun returns to pending and only succeeds after completion", async (t) =>
+  withFixture(t, true, async (f, run) => {
+    f.ciRuns[0].conclusion = "failure";
+    assert.equal((await run()).state, "failure");
+    f.ciRuns[0].status = "in_progress";
+    f.ciRuns[0].conclusion = null;
+    assert.equal((await run()).state, "pending");
+    f.ciRuns[0].status = "completed";
+    f.ciRuns[0].conclusion = "failure";
+    assert.equal((await run()).state, "failure");
+    f.ciRuns[0].conclusion = "success";
+    assert.equal((await run()).state, "success");
+  }));
+
+test("unexpected CI workflow paths or statuses still fail", async (t) =>
+  withFixture(t, true, async (f, run) => {
+    f.ciRuns[0].status = "in_progress";
+    f.ciRuns[0].path = ".github/workflows/spoof.yml";
+    assert.equal((await run()).state, "failure");
+    f.ciRuns[0].path = ".github/workflows/ci.yml";
+    f.ciRuns[0].status = "unknown";
+    assert.equal((await run()).state, "failure");
+  }));
+
+test("latest unsuccessful or incomplete completed CI blocks without falling back", async (t) =>
+  withFixture(t, true, async (f, run) => {
+    for (const conclusion of [
+      "failure",
+      "cancelled",
+      "skipped",
+      "timed_out",
+      "action_required",
+      "neutral",
+      "stale",
+      null,
+    ]) {
       f.ciRuns.unshift({ ...f.ciRuns[0], id: 124, conclusion });
       assert.equal((await run()).state, "failure");
       f.ciRuns.shift();
@@ -508,12 +616,12 @@ test("transitive changes can qualify with current complete trusted AI PASS", asy
     },
   ));
 
-test("a changed head, base, tested merge or publication race invalidates approval", async (t) =>
+test("changed revisions and publication races never authorize approval", async (t) =>
   withFixture(t, true, async (f, run) => {
     for (const key of ["head", "base"]) {
       const sha = f.pr[key].sha;
       f.pr[key].sha = "f".repeat(40);
-      assert.equal((await run()).state, "failure");
+      assert.equal((await run()).state, key === "head" ? "pending" : "failure");
       f.pr[key].sha = sha;
     }
     f.pr.merge_commit_sha = "f".repeat(40);
