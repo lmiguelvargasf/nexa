@@ -102,7 +102,6 @@ jobs:
           prompt-file: ${{ runner.temp }}/dependency-review/prompt.md
           output-schema-file: ${{ runner.temp }}/dependency-review/schema.json
           output-file: ${{ runner.temp }}/dependency-review/result.json
-          codex-args: '["--skip-git-repo-check"]'
       # Only trusted parsers/artifact upload follow the Action; never run PR code,
       # install dependencies, or publish with write credentials on this runner.
       - name: Validate output and extract numeric usage without publishing transcripts
