@@ -26,7 +26,6 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       NEXT_TELEMETRY_DISABLED: "1"
       DISABLE_TELEMETRY: "1"
-      SKILL_UPDATE_OUTPUT: ${{ runner.temp }}/skill-update-report
     steps:
       - name: Check out the default branch
         uses: actions/checkout@v6
@@ -40,6 +39,8 @@ jobs:
       - name: Configure Git authentication
         run: gh auth setup-git
       - name: Prepare, validate, and publish one update PR
+        env:
+          SKILL_UPDATE_OUTPUT: ${{ runner.temp }}/skill-update-report
         run: mise exec -- bun scripts/skills/update.mjs --publish
       - name: Preserve the report, including failed or pending updates
         if: always()
