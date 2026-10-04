@@ -72,7 +72,9 @@ repository's default branch in GitHub Settings → Rules → Rulesets:
 
 The supplied repository initially had a disabled ruleset and no active branch
 protection. Workflow YAML does not enable these settings by itself. Verify them
-in the destination repository. The advisory **Dependency review** workflow must
+in the destination repository. For `lmiguelvargasf/nexa`, ruleset [17001152](https://github.com/lmiguelvargasf/nexa/rules/17001152) was activated on October 3 after [PR #25 CI](https://github.com/lmiguelvargasf/nexa/actions/runs/37169889584) passed. It preserves the previous PR/deletion/force-push rules, requires **Dependency validation** specifically from GitHub Actions (integration 15368), enforces an up-to-date base, and has no bypass actors. Repository automatic merging remains disabled. These settings are repository-specific and do not transfer with the template.
+
+The advisory **Dependency review** workflow must
 not be a required check: missing funding or AI `NEEDS_HUMAN` must not prevent a
 maintainer from completing an otherwise validated PR.
 
@@ -166,7 +168,7 @@ saved. A fixed pilot count is an operational milestone, not a safety certificati
 | Local configuration validation/extraction and isolated failure-path fixtures | Recorded in the implementation PR |
 | Hosted Renovate installation and a reproducible Bun/mise update | Pending external setup/onboarding |
 | Funded project, API secret and enforced spending cap | Not verified; no paid pilot review run |
-| Active required-check rules in the destination repository | Must be verified after the new check exists |
+| Active required-check rules in the destination repository | Verified for Nexa ruleset 17001152; reconfigure for copied repositories |
 | Real PR outcomes and measured Sol costs | Pending pilot |
 | Maintainer's automatic-merge activation decision | Pending; automatic merging disabled |
 
