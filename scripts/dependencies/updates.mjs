@@ -69,7 +69,7 @@ const sameMajorIncrease = (before, after, allowEqual = false) => {
   );
 };
 
-const platforms = (entry) => [
+export const toolPlatforms = (entry) => [
   ...Object.values(entry.platforms ?? {}),
   ...Object.entries(entry)
     .filter(([key]) => key.startsWith("platforms."))
@@ -77,7 +77,7 @@ const platforms = (entry) => [
 ];
 
 function toolSource(name, entry) {
-  const sources = platforms(entry).map(({ url, checksum }) => {
+  const sources = toolPlatforms(entry).map(({ url, url_api, checksum }) => {
     if (!/^sha256:[a-f0-9]{64}$/.test(checksum ?? ""))
       throw new Error(`${name}: missing tool checksum.`);
     const parsed = new URL(url);
@@ -93,8 +93,11 @@ function toolSource(name, entry) {
       name === "node" &&
       parsed.hostname === "nodejs.org" &&
       parsed.pathname.startsWith(`/dist/v${entry.version}/`)
-    )
+    ) {
+      if (url_api !== undefined)
+        throw new Error(`${name}: unsupported tool asset API URL.`);
       return { repository: "nodejs/node", tag: `v${entry.version}` };
+    }
     const match =
       /^\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/releases\/download\/([^/]+)\//.exec(
         parsed.pathname,
@@ -107,6 +110,15 @@ function toolSource(name, entry) {
       )
     )
       throw new Error(`${name}: unsupported versioned tool source.`);
+    if (url_api !== undefined) {
+      const prefix = `https://api.github.com/repos/${match[1]}/releases/assets/`;
+      const id =
+        typeof url_api === "string" && url_api.startsWith(prefix)
+          ? url_api.slice(prefix.length)
+          : "";
+      if (!/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id)))
+        throw new Error(`${name}: unsupported tool asset API URL.`);
+    }
     return { repository: match[1], tag: match[2] };
   });
   if (!sources.length || sources.some((source) => !equal(source, sources[0])))
@@ -151,9 +163,10 @@ function miseChanges(before, after, reasons) {
     const stripEntry = (entry) => {
       const result = structuredClone(entry);
       delete result.version;
-      for (const platform of platforms(result)) {
+      for (const platform of toolPlatforms(result)) {
         delete platform.url;
         delete platform.checksum;
+        delete platform.url_api;
       }
       return result;
     };

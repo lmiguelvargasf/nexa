@@ -43,7 +43,12 @@ Version-only overrides may qualify; adding/removing dependencies or changing
 scripts, trust, engines independently of a corresponding runtime update, and
 other manifest behavior cannot. mise updates must preserve settings, tasks,
 backends and platform/provenance policy, and provide synchronized exact pins and
-checksummed versioned lock URLs. Bun packageManager/engine and Node engine
+checksummed versioned lock URLs. Optional `url_api` download metadata must use the
+same GitHub repository's canonical release-asset endpoint. Review preparation
+verifies the API asset's exact download URL and any published SHA256 against the
+lock; missing or inconsistent metadata blocks automatic approval. Backend,
+platform set and provenance changes still require human review.
+Bun packageManager/engine and Node engine
 minimums track their mise updates. Standard-library Python 3.11+ `tomllib` reads
 TOML as data; dependency code is never evaluated to parse it.
 
@@ -52,7 +57,7 @@ comments. Workflow commands, permissions, inputs, conditions and structure stay
 unchanged. Exact upstream commits are resolved; an immutable digest must match
 its annotated version tag. Sol receives upstream release notes or bounded exact
 source comparisons plus workflow consumers. Missing/large source evidence
-requires a human rather than a partial paid review. Policy version 3 invalidates
+requires a human rather than a partial paid review. Policy version 4 invalidates
 old reviews; obtain fresh current CI and Sol PASS after deployment.
 
 Before accepting onboarding, verify a real Bun update changes both `package.json`
