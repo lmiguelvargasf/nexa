@@ -54,6 +54,14 @@ Supabase SQL migrations are the source of truth for schema changes. After changi
 
 This project uses [Task](https://taskfile.dev) for local commands. Run `task` to list available tasks.
 
+## Next.js Agent Guidance
+
+Agents read the version-matched documentation bundled in
+`node_modules/next/dist/docs/`, as required by [AGENTS.md](AGENTS.md#read-first).
+The upstream [`next-best-practices` skill was retired](https://github.com/vercel/nextjs-skills/blob/c522619e45aa3492fd2bfc916b308b275eff7798/README.md)
+in favor of these docs, so Nexa no longer installs or tracks it. The existing
+`vercel-react-best-practices` skill remains available for performance guidance.
+
 ## GitHub Issues
 
 Agents use the project-scoped `github-issues` skill with this repository's issue

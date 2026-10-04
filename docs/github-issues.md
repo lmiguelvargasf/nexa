@@ -16,8 +16,9 @@ version so its source and update behavior are reproducible.
 
 The upstream MIT copyright and permission notice is preserved verbatim in
 [`.agents/licenses/github-awesome-copilot-LICENSE`](../.agents/licenses/github-awesome-copilot-LICENSE).
-`prek.toml` excludes only this skill and license from whitespace, line-ending,
-BOM, and final-newline fixers. Other checks remain enabled. The reviewed upstream
+`prek.toml` excludes vendored skills and licenses from whitespace, line-ending,
+BOM, and final-newline fixers, including this skill and its external license.
+Other checks remain enabled. The reviewed upstream
 skill contains trailing whitespace, and its license lacks a final newline.
 
 ## Refresh or update only this skill
