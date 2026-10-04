@@ -139,12 +139,28 @@ tasks:
       - task: typecheck
       - task: test:run
       - task: skills:test
+      - task: dependencies:test
       - task: build
 
   skills:test:
     desc: Test skill update preparation and publication with isolated fixtures
     cmds:
       - mise exec -- node --test scripts/skills/*.test.mjs
+
+  dependencies:test:
+    desc: Test dependency automation trust boundaries and failure paths with fixtures
+    cmds:
+      - mise exec -- node --test scripts/dependencies/*.test.mjs
+
+  dependencies:config:
+    desc: Validate the Renovate configuration with the pinned validator
+    cmds:
+      - mise exec -- bunx --package renovate@44.132.5 renovate-config-validator --strict renovate.json
+
+  dependencies:audit:
+    desc: Audit dependencies with exact, expiring advisory exceptions
+    cmds:
+      - mise exec -- node scripts/dependencies/audit.mjs
 
   skills:check:
     desc: Prepare and validate skill updates in an isolated checkout without publishing

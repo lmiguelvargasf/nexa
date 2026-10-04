@@ -3,8 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -18,31 +17,90 @@ env:
   NEXT_TELEMETRY_DISABLED: "1"
 
 jobs:
+  scope:
+    name: Validation scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      database: ${{ steps.scope.outputs.database }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: jdx/mise-action@v4
+        with:
+          install_args: node
+      - name: Determine applicable checks and tested revision
+        id: scope
+        run: node scripts/dependencies/ci.mjs scope
+        env:
+          EVENT_JSON: ${{ toJSON(github.event) }}
+      - name: Preserve the tested PR identity
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-identity
+          path: validation-identity.json
+          retention-days: 7
+          if-no-files-found: error
+
   verify:
     name: Pre-PR validation
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-
+    timeout-minutes: 30
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up pinned tools
-        uses: jdx/mise-action@v4
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@v4
         with:
           install_args: node bun task
           cache: true
-
-      - name: Cache Bun package cache
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-bun-
+      - run: bun install --frozen-lockfile
+      - name: Install browser binaries and system libraries
+        run: bunx --no-install playwright install --with-deps
+      - name: Run validation and production browser smoke
+        run: task verify:all
+      - name: Audit dependencies
+        run: task dependencies:audit
+      - name: Preserve browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failures
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+  database:
+    needs: scope
+    if: needs.scope.outputs.database == 'true'
+    uses: ./.github/workflows/database.yml
 
-      - name: Run pre-PR validation
-        run: task verify
+  aggregate:
+    name: Dependency validation
+    needs: [scope, verify, database]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@v4
+        with:
+          install_args: node
+      - name: Require every applicable check
+        run: node scripts/dependencies/ci.mjs aggregate
+        env:
+          RESULTS_JSON: ${{ toJSON(needs) }}
+          DATABASE_REQUIRED: ${{ needs.scope.outputs.database }}

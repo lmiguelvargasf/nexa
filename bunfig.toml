@@ -1,0 +1,4 @@
+[install]
+# Three days; also covers newly resolved transitive packages. Existing locked
+# versions are unchanged. Urgent security exceptions require human review.
+minimumReleaseAge = 259200

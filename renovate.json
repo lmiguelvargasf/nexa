@@ -1,0 +1,65 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["bun", "mise", "github-actions"],
+  "timezone": "America/Guayaquil",
+  "schedule": ["before 10am on wednesday"],
+  "prConcurrentLimit": 3,
+  "prHourlyLimit": 0,
+  "minimumReleaseAge": "3 days",
+  "minimumReleaseAgeBehaviour": "timestamp-required",
+  "internalChecksFilter": "strict",
+  "rangeStrategy": "bump",
+  "separateMinorPatch": true,
+  "rebaseWhen": "behind-base-branch",
+  "automerge": false,
+  "platformAutomerge": true,
+  "dependencyDashboard": true,
+  "lockFileMaintenance": { "enabled": true },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "automerge": false,
+    "minimumReleaseAge": "0 days",
+    "schedule": ["at any time"]
+  },
+  "packageRules": [
+    {
+      "matchDepNames": ["clsx", "tailwind-merge"],
+      "matchUpdateTypes": ["patch"],
+      "groupName": "stable helpers"
+    },
+    {
+      "matchDepNames": [
+        "next",
+        "react",
+        "react-dom",
+        "@types/react",
+        "@types/react-dom"
+      ],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "Next.js and React"
+    },
+    {
+      "matchDepNames": ["ai", "@ai-sdk/*"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "AI SDK"
+    },
+    {
+      "matchDepNames": ["@react-email/*", "react-email"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "React Email"
+    },
+    {
+      "matchDepNames": ["node", "@types/node"],
+      "groupName": "Node.js toolchain"
+    },
+    {
+      "matchDepNames": ["bun", "oven-sh/bun"],
+      "groupName": "Bun toolchain"
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "pinDigests": true
+    }
+  ]
+}

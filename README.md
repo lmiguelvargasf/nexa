@@ -1,6 +1,6 @@
 # Nexa
 
-[![Next.js](https://img.shields.io/badge/Next.js-16.2-black?logo=nextdotjs)](https://nextjs.org/docs)
+[![Next.js](https://img.shields.io/badge/Next.js-16.3-black?logo=nextdotjs)](https://nextjs.org/docs)
 [![React](https://img.shields.io/badge/React-19.2-149eca?logo=react&logoColor=white)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Node.js](https://img.shields.io/badge/Node.js-24.16-5fa04e?logo=nodedotjs&logoColor=white)](https://nodejs.org)
@@ -58,6 +58,12 @@ This project uses [Task](https://taskfile.dev) for local commands. Run `task` to
 
 Agents use the project-scoped `github-issues` skill with this repository's issue
 policy and templates. See [skill provenance and updates](docs/github-issues.md).
+
+## Dependency Updates
+
+Renovate prepares weekly updates with CI and optional advisory Sol reviews.
+Merges stay manual during the supervised rollout. See
+[setup, spending controls, and pilot](docs/dependency-updates.md).
 
 ## Project Skill Updates
 
