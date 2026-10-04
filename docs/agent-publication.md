@@ -1,4 +1,101 @@
-# Briko agent pull requests
+# Agent pull request publication
+
+Template-derived projects default to their own authenticated Git/`gh` account.
+They inherit tooling and instructions, not the owner's private Brikosi App or
+credentials. Application setup does not require an App. A GitHub App publisher is
+an optional, explicit choice; canonical `lmiguelvargasf/nexa` requires Briko.
+
+## Select a publication mode
+
+Run `mise exec -- task agents:publication` from the checkout. This prints JSON
+containing the mode and repository derived from origin. It does not read App
+credentials, push commits or create PRs. It rejects conflicting/multiple origin
+destinations, invalid selections and incomplete App paths. This is a policy
+inspection command; follow the selected publication flow below afterward.
+
+Selection lives in this clone's local Git configuration, outside tracked files.
+Global and included Git settings are ignored. A new template-derived clone has
+no selection and uses `github`; an explicit ordinary selection is:
+
+```bash
+git config --local nexa.publication.mode github
+```
+
+For App publication, first provision the protected files below, then set all four
+settings. Replace the example repository and absolute paths with this project's
+verified destination and your protected paths:
+
+```bash
+git config --local nexa.publication.mode app
+git config --local nexa.publication.repository OWNER/REPO
+git config --local nexa.publication.publisherPath /absolute/protected/path/publish.mjs
+git config --local nexa.publication.configPath /absolute/protected/path/config.json
+mise exec -- task agents:publication
+```
+
+The repository pin prevents accidentally retaining an App selection after
+repointing origin. Git worktrees share the clone-local selection. A separate
+clone must be configured separately. Never put a key or token in Git config.
+The App config itself stays in an owner-only external file. App mode cannot
+fall back to the human account when configuration or authentication fails.
+Selecting an App also requires an external, owned mode-600 regular publisher
+and config file; the protected publisher subsequently validates config contents,
+key protection, App identity and installation scope before publishing.
+
+Canonical Nexa must have `app` selected, pinning `lmiguelvargasf/nexa` and using
+the owner's `/Users/m/.config/briko/publish.mjs` and
+`/Users/m/.config/briko/config.json`. If selection is absent on a new Nexa clone,
+restore that selection from a trusted owner session before publication; the
+template default does not override Nexa's explicit requirement. Another owner
+does not inherit this exception just by copying the source.
+
+To intentionally switch a project that permits ordinary publication back to
+`github`, remove its App paths and pin, then select `github`. For example, use
+`git config --local --unset-all nexa.publication.publisherPath` and likewise
+remove `configPath` and `repository`. An absent setting needs no removal.
+Leaving App paths with `github` or no mode is rejected as incomplete setup.
+Never switch modes as a workaround for an App failure or change another author's
+existing PR identity.
+
+## Publish with your authenticated account
+
+With `github` selected, use the existing issue implementation workflow: inspect
+the issue/branches/PRs, implement, validate, fill every PR-template heading, and
+commit with accurate authorship. Confirm authentication with
+`mise exec -- gh auth status` and `mise exec -- gh api user --jq .login`; check
+that normal Git push authentication is also configured for origin. Missing
+authentication is a setup blocker, not a reason to claim publication succeeded.
+
+Use the repository printed by `task agents:publication`, the actual issue branch
+from `git branch --show-current`, and the intended base. Replace the examples
+below; do not publish to Nexa merely because this template came from Nexa:
+
+```bash
+mise exec -- gh pr list --repo OWNER/REPO --state all --head issue/123-feature
+git push origin HEAD:refs/heads/issue/123-feature
+mise exec -- gh pr create --repo OWNER/REPO --head issue/123-feature --base main \
+  --title "Implement the feature" --body-file /absolute/path/to/completed-pr-body.md
+```
+
+Before pushing, verify the branch belongs to this issue and origin has a single
+matching fetch/push destination. Fetch/integrate the current base and rerun
+applicable checks when needed. Use ordinary non-forced pushes. Read existing
+matching PRs before updating: verify the same repository, branch, base, issue
+reference and authenticated author. Reuse your matching open PR, preserve human
+description edits, and record current validation evidence. Stop for unrelated
+authors, closed/merged PRs or conflicting branches; do not overwrite or transfer
+them. An uncertain creation/push must be inspected before retrying to avoid
+duplicates. Completed PRs are regular; drafts require an explicit request for
+unfinished work. Verify the published URL, author, base/head, issue reference,
+template body and ready state, then attach the PR to the Codex chat.
+
+These commands use your existing authentication without replacing your global
+login. They preserve commit authors and committers, disclose AI authorship, and
+retain required CI/review/merge protections. A human-authored PR is subject to
+GitHub's usual restriction against approving your own PR; owners who need a
+separate publication identity can explicitly select an App.
+
+## Optional App publisher (Briko on Nexa)
 
 The publisher is called **Briko**. In its GitHub App slug, `brikosi`, **SI** stands
 for **Super Intelligence**; the registered App name is **Brikosi** and its bot
@@ -22,9 +119,14 @@ The client ID is available in the owner's App settings. These IDs document this
 installation; the reusable publisher reads its protected config and resolves the
 destination from the clone instead of hardcoding them.
 
-For another repository/account, register a private App under its owner. App names
-are globally unique; agree an available registration name and record its actual
-slug and bot ID instead of assuming a spelling.
+For another repository under the same personal account, the owner can extend the
+existing private Brikosi installation's selected repositories. Keep a separate
+protected config for each destination, using the same App identity/key and the
+verified installation ID. Each invocation still requests a token for just its
+destination. Another account or organization owner can register their own private
+App; App names are globally unique, so record its actual slug and bot ID instead
+of assuming Brikosi is available. Brikosi remains private; no credentials are
+distributed with the template.
 
 Repository permissions:
 
@@ -40,9 +142,10 @@ changes workflow files. An App used exclusively for other files can omit that
 registration permission. Do not grant Administration, Actions, Secrets, Checks,
 organization/account permissions or a branch-protection/ruleset bypass. Keep
 webhooks, OAuth user authorization and device flow disabled; no service needs to
-listen for events. Install using **Only select repositories**, selecting Nexa
-alone for this installation. The reusable publisher derives its destination from
-the current clone's origin and requires an exact protected repository pin.
+listen for events. Install using **Only select repositories**, selecting only
+authorized destinations (initially Nexa for the owner's installation). The reusable
+publisher derives its destination from the current clone's origin and requires an
+exact protected repository pin.
 
 Record the App ID, client ID, slug and installation ID from GitHub's App settings
 and installation pages. Verify the public `SLUG[bot]` identity with
@@ -110,6 +213,9 @@ execution boundary when running untrusted PR code. Never run untrusted tests
 concurrently with credential provisioning/publication in the same user session.
 
 ## Issue implementation and publication
+
+This section applies to `app` mode. Use the publisher and config paths reported
+by `task agents:publication`; all earlier generic workflow requirements still apply.
 
 1. Read the issue, discussion, existing branches/PRs and acceptance criteria.
    Fetch the intended remote base. Start `issue/<number>-<description>` from
@@ -202,7 +308,10 @@ normal review. Do not submit approval or merge to demonstrate the integration.
 
 ## Validation record
 
-Fixture checks are included in `task verify` through `task agents:test` and cover
+Mode-selection fixtures use temporary Git repositories to check template defaults,
+explicit App selection without reading credentials, incomplete/invalid setup,
+destination changes and protected paths. Existing App fixture checks are included
+in `task verify` through `task agents:test` and cover
 destination pins, App/bot identity, token scope/expiry, credential isolation,
 failure recovery, leases, ownership and repeated publication. Actual setup and
 hosted CI/review evidence are recorded in the implementation PR; unavailable

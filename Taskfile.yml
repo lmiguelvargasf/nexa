@@ -148,6 +148,11 @@ tasks:
     cmds:
       - mise exec -- node --test scripts/agents/*.test.mjs
 
+  agents:publication:
+    desc: Show this clone's publication mode and destination without loading credentials
+    cmds:
+      - mise exec -- node scripts/agents/publication-mode.mjs
+
   skills:test:
     desc: Test skill update preparation and publication with isolated fixtures
     cmds:

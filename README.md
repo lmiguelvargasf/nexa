@@ -75,8 +75,13 @@ Weekly skill updates are prepared as one PR for manual review and merging. See
 
 ## Agent Pull Requests
 
-Briko is the coding-agent publisher; **SI** stands for **Super Intelligence** in its
-GitHub App slug, `brikosi` (`brikosi[bot]`). It uses the dedicated Brikosi GitHub App
-for implementation PRs.
-It publishes reviewed commits for the maintainer to review and merge. See
-[protected local setup, publication, and credential lifecycle](docs/agent-publication.md).
+When using Nexa as a template, agent PRs default to your own authenticated Git and
+`gh` setup. Run `task agents:publication` to inspect this clone's destination and
+mode. You do not need access to Briko or any GitHub App.
+
+A private GitHub App publisher is optional and selected through local Git
+configuration, which is not copied with the template. Canonical Nexa explicitly
+requires the owner's private Brikosi App (`brikosi[bot]`), called Briko; **SI** means
+**Super Intelligence**. The owner can reuse it for selected personal repositories.
+Publication preserves commit authorship. See
+[mode selection, publication, and protected App setup](docs/agent-publication.md).
