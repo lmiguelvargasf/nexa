@@ -251,9 +251,12 @@ have the exact current head/base parents. GitHub may regenerate the synthetic
 commit with a different timestamp; a different SHA qualifies only when both
 commits also have the identical complete Git tree. Missing tree data or changed
 content blocks approval. The original CI-tested SHA stays in the review and
-approval identity. Failed or missing evidence produces a failing status with a
-link to the workflow summary. Legitimately inapplicable database checks remain
-handled by **Dependency validation**.
+approval identity. While current-revision CI has not started or is queued/running,
+the policy stays pending and still blocks merging. CI start events also reevaluate
+reruns so a previous failure can return to pending. Completed unsuccessful CI and
+invalid or missing validation/review evidence produce a failing status with a link
+to the workflow summary. Legitimately inapplicable database checks remain handled
+by **Dependency validation**.
 
 Once required, the gate applies to all PRs to the default branch. Human completion
 uses an explicit revision-bound attestation, including for ineligible updates and
