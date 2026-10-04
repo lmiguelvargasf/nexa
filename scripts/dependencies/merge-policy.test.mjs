@@ -43,6 +43,7 @@ function fixture(automatic = false, mutate = () => {}) {
   const policy = JSON.parse(
     readFileSync(join(directory, ".github/dependencies/policy.json")),
   );
+  policy.mode = automatic ? "automatic" : "supervised";
   policy.automaticMerging = automatic;
   writeFileSync(
     join(directory, ".github/dependencies/policy.json"),

@@ -26,7 +26,9 @@
     {
       "matchDepNames": ["clsx", "tailwind-merge"],
       "matchUpdateTypes": ["patch"],
-      "groupName": "stable helpers"
+      "groupName": "stable helpers",
+      "automerge": true,
+      "automergeType": "pr"
     },
     {
       "matchDepNames": [

@@ -23,7 +23,7 @@ const policy = JSON.parse(
     new URL("../../.github/dependencies/policy.json", import.meta.url),
   ),
 );
-function withReport(callback) {
+function withReport(callback, automatic = false) {
   const directory = mkdtempSync(join(tmpdir(), "nexa-review-test-"));
   writeFileSync(
     join(directory, "report.json"),
@@ -31,7 +31,11 @@ function withReport(callback) {
       key: "key",
       runId: 1,
       identity,
-      policy,
+      policy: {
+        ...policy,
+        mode: automatic ? "automatic" : "supervised",
+        automaticMerging: automatic,
+      },
       status: "PENDING",
       complete: true,
     }),
@@ -44,17 +48,20 @@ function withReport(callback) {
 }
 
 test("missing credentials/API error, timeout and cancellation never become PASS", () => {
-  for (const outcome of ["failure", "cancelled", "skipped", undefined])
-    withReport((directory) => {
-      const report = finish(directory, outcome);
-      assert.equal(report.status, "ERROR");
-      assert.match(report.reason, /No automatic retry/);
-      assert.match(
-        readFileSync(join(directory, "summary.md"), "utf8"),
-        /automatic merging is disabled/,
-      );
-      assert.equal(report.cost, null);
-    });
+  for (const automatic of [false, true])
+    for (const outcome of ["failure", "cancelled", "skipped", undefined])
+      withReport((directory) => {
+        const report = finish(directory, outcome);
+        assert.equal(report.status, "ERROR");
+        assert.match(report.reason, /No automatic retry/);
+        assert.match(
+          readFileSync(join(directory, "summary.md"), "utf8"),
+          automatic
+            ? /Only the trusted merge policy can authorize/
+            : /automatic merging is disabled/,
+        );
+        assert.equal(report.cost, null);
+      }, automatic);
 });
 
 test("successful process with missing or malformed output is an error", () => {
@@ -70,28 +77,34 @@ test("successful process with missing or malformed output is an error", () => {
     });
 });
 
-test("structured PASS, NEEDS_HUMAN and BLOCK remain advisory", () => {
-  for (const decision of ["PASS", "NEEDS_HUMAN", "BLOCK"])
-    withReport((directory) => {
-      writeFileSync(
-        join(directory, "result.json"),
-        JSON.stringify({
-          ...identity,
-          repository: undefined,
-          prNumber: undefined,
-          decision,
-          summary: "Checked <script> evidence",
-          findings: [],
-          evidence: ["bundle release"],
-          uncertainties: [],
-        }),
-      );
-      const report = finish(directory, "success");
-      assert.equal(report.status, decision);
-      assert.match(summary(report), /effort: `medium`/);
-      assert.doesNotMatch(summary(report), /<script>/);
-      assert.match(summary(report), /AI output never authorizes a merge/);
-    });
+test("structured decisions preserve the independent merge gate in both modes", () => {
+  for (const automatic of [false, true])
+    for (const decision of ["PASS", "NEEDS_HUMAN", "BLOCK"])
+      withReport((directory) => {
+        writeFileSync(
+          join(directory, "result.json"),
+          JSON.stringify({
+            ...identity,
+            repository: undefined,
+            prNumber: undefined,
+            decision,
+            summary: "Checked <script> evidence",
+            findings: [],
+            evidence: ["bundle release"],
+            uncertainties: [],
+          }),
+        );
+        const report = finish(directory, "success");
+        assert.equal(report.status, decision);
+        assert.match(summary(report), /effort: `medium`/);
+        assert.doesNotMatch(summary(report), /<script>/);
+        assert.match(
+          summary(report),
+          automatic
+            ? /Only the trusted merge policy can authorize/
+            : /AI output never authorizes a merge/,
+        );
+      }, automatic);
 });
 
 test("numeric usage is extracted without exposing session contents", () =>
