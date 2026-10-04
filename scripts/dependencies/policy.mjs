@@ -31,15 +31,23 @@ export function assertValidation(results, databaseRequired) {
   }
 }
 
-export function assertIdentity(identity, pr, commit, repository) {
+export function assertIdentity(
+  identity,
+  pr,
+  commit,
+  repository,
+  renovateOnly = true,
+) {
   if (
     pr.state !== "open" ||
     pr.draft ||
-    pr.head.repo?.full_name !== repository ||
+    !pr.head.repo?.full_name ||
     pr.base.repo?.full_name !== repository ||
-    pr.user.id !== RENOVATE_ID ||
-    pr.user.login !== "renovate[bot]" ||
-    pr.user.type !== "Bot"
+    (renovateOnly &&
+      (pr.head.repo?.full_name !== repository ||
+        pr.user.id !== RENOVATE_ID ||
+        pr.user.login !== "renovate[bot]" ||
+        pr.user.type !== "Bot"))
   ) {
     throw new Error(
       "Only open, same-repository Renovate PRs can enter the reviewer.",
