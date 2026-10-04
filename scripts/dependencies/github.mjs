@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { toolPlatforms } from "./updates.mjs";
 
 export function repositoryName(value) {
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(value ?? ""))
@@ -251,7 +252,40 @@ export async function upstreamEvidence(
     baseCommit: old.sha,
     headCommit: next.sha,
   };
-  if (old.sha === next.sha)
+  if (change.manager === "mise") {
+    identity.assets = [];
+    for (const platform of toolPlatforms(change.newEntry ?? {})) {
+      if (platform.url_api === undefined) continue;
+      const prefix = `https://api.github.com/repos/${change.repository}/releases/assets/`;
+      const id = platform.url_api.startsWith(prefix)
+        ? platform.url_api.slice(prefix.length)
+        : "";
+      if (!/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id)))
+        throw new Error("Unsupported tool asset API URL");
+      const asset = await client.api(`releases/assets/${id}`, {
+        maxBytes: 16_384,
+      });
+      if (
+        asset.id !== Number(id) ||
+        asset.state !== "uploaded" ||
+        asset.url !== platform.url_api ||
+        asset.browser_download_url !== platform.url ||
+        (asset.digest != null && asset.digest !== platform.checksum)
+      )
+        throw new Error(
+          "Tool asset metadata does not match its locked download",
+        );
+      identity.assets.push({
+        apiUrl: asset.url,
+        downloadUrl: asset.browser_download_url,
+        publishedDigest: asset.digest ?? null,
+        lockedChecksum: platform.checksum,
+      });
+    }
+    if (Buffer.byteLength(JSON.stringify(identity)) > maxBytes)
+      throw new Error("Tool asset evidence exceeds the context limit");
+  }
+  if (old.sha === next.sha && change.manager === "github-actions")
     return {
       ...identity,
       unchangedSource: true,
@@ -275,12 +309,17 @@ export async function upstreamEvidence(
       if (release.body?.trim()) {
         if (Buffer.byteLength(release.body) > maxBytes)
           throw new Error("Release notes exceed the context limit");
-        return {
+        const result = {
           ...identity,
           releaseUrl: release.html_url,
           tag,
           notes: release.body,
         };
+        if (Buffer.byteLength(JSON.stringify(result)) > maxBytes)
+          throw new Error(
+            "Upstream release evidence exceeds the context limit",
+          );
+        return result;
       }
     } catch (error) {
       if (!error.message.includes("HTTP 404")) throw error;

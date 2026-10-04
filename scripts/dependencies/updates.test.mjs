@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { upstreamEvidence } from "./github.mjs";
 import { bunEligibility, satisfies, version } from "./policy.mjs";
@@ -176,6 +177,152 @@ test("tool majors, settings/backend/source/checksum changes and unsynchronized r
       JSON.stringify(inspectUpdates(f)),
     );
   }
+});
+
+// Exact tool lock entries from hosted Renovate PR #44, including all platforms.
+function assetSnapshot() {
+  const snapshot = miseSnapshot("prek", "0.4.3", "0.4.14");
+  for (const side of ["before", "after"])
+    snapshot[side]["mise.lock"] = readFileSync(
+      new URL(`./fixtures/mise-asset-api/${side}.lock`, import.meta.url),
+      "utf8",
+    );
+  return snapshot;
+}
+
+test("real generated mise lock accepts canonical asset API metadata on every platform", () => {
+  assert.deepEqual(inspectUpdates(assetSnapshot()).reasons, []);
+  assert.equal(inspectUpdates(assetSnapshot()).candidate, true);
+});
+
+test("asset API metadata cannot change source identity, trust or unrelated tool data", () => {
+  const valid = assetSnapshot();
+  const endpoint =
+    "https://api.github.com/repos/j178/prek/releases/assets/517620521";
+  for (const invalid of [
+    endpoint.replace("https:", "http:"),
+    endpoint.replace("api.github.com", "example.com"),
+    endpoint.replace("api.github.com", "user@api.github.com"),
+    endpoint.replace("j178/prek", "other/prek"),
+    `${endpoint}?token=unsafe`,
+    `${endpoint}#fragment`,
+    endpoint.replace("517620521", "0"),
+    endpoint.replace("517620521", "0517620521"),
+    endpoint.replace("517620521", "9007199254740992"),
+    endpoint.replace("517620521", "../assets/517620521"),
+  ]) {
+    const f = structuredClone(valid);
+    f.after["mise.lock"] = f.after["mise.lock"].replace(endpoint, invalid);
+    assert.equal(inspectUpdates(f).candidate, false, invalid);
+  }
+  for (const mutate of [
+    (f) => {
+      f.after["mise.lock"] = f.after["mise.lock"].replace(
+        'provenance = "github-attestations"',
+        'provenance = "none"',
+      );
+    },
+    (f) => {
+      f.after["mise.lock"] = f.after["mise.lock"].replace(
+        'backend = "aqua:j178/prek"',
+        'backend = "custom:prek"',
+      );
+    },
+    (f) => {
+      f.after["mise.lock"] = f.after["mise.lock"].replace(
+        "platforms.linux-arm64",
+        "platforms.windows-arm64",
+      );
+    },
+    (f) => {
+      f.after["mise.lock"] += '\n[tools.prek.unrelated]\ncommand = "unsafe"\n';
+    },
+    (f) => {
+      f.after["mise.toml"] = f.before["mise.toml"];
+    },
+  ]) {
+    const f = structuredClone(valid);
+    mutate(f);
+    assert.equal(inspectUpdates(f).candidate, false);
+  }
+});
+
+test("asset preparation verifies all locked URLs and published digests before approval", async () => {
+  const change = inspectUpdates(assetSnapshot()).changes[0];
+  const platforms = Object.values(change.newEntry).filter(
+    (entry) => entry?.url_api,
+  );
+  const api = async (path) => {
+    if (path.startsWith("commits/"))
+      return { sha: path.endsWith("v0.4.3") ? "a".repeat(40) : "b".repeat(40) };
+    if (path.startsWith("releases/assets/")) {
+      const platform = platforms.find((entry) => entry.url_api.endsWith(path));
+      return {
+        id: Number(path.split("/").at(-1)),
+        state: "uploaded",
+        url: platform.url_api,
+        browser_download_url: platform.url,
+        digest: platform.checksum,
+      };
+    }
+    return {
+      body: "Tool release notes",
+      html_url: "https://github.com/j178/prek/releases/tag/v0.4.14",
+    };
+  };
+  const result = await upstreamEvidence(change, 12000, () => ({ api }));
+  assert.equal(result.assets.length, 4);
+  for (const asset of result.assets)
+    assert.equal(asset.publishedDigest, asset.lockedChecksum);
+  for (const invalid of [
+    { id: 1 },
+    { state: "deleted" },
+    { url: "https://example.com" },
+    { browser_download_url: platforms[0].url },
+    { digest: `sha256:${"b".repeat(64)}` },
+  ]) {
+    await assert.rejects(
+      upstreamEvidence(change, 12000, () => ({
+        api: async (path) => {
+          const value = await api(path);
+          return path === "releases/assets/517620585"
+            ? { ...value, ...invalid }
+            : value;
+        },
+      })),
+      /does not match/,
+    );
+  }
+  await assert.rejects(
+    upstreamEvidence(change, 12000, () => ({
+      api: async (path) => {
+        if (path.startsWith("releases/assets/"))
+          throw new Error("Evidence request returned HTTP 404");
+        return api(path);
+      },
+    })),
+    /HTTP 404/,
+  );
+  const noDigest = await upstreamEvidence(change, 12000, () => ({
+    api: async (path) => {
+      const value = await api(path);
+      return path.startsWith("releases/assets/")
+        ? { ...value, digest: null }
+        : value;
+    },
+  }));
+  assert.equal(noDigest.assets[0].publishedDigest, null);
+  await assert.rejects(
+    upstreamEvidence(change, 2000, () => ({
+      api: async (path) => {
+        const value = await api(path);
+        return path.startsWith("releases/tags/")
+          ? { ...value, body: "x".repeat(1500) }
+          : value;
+      },
+    })),
+    /context limit/,
+  );
 });
 
 function actions(before, after) {

@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "mode": "automatic",
   "automaticMerging": true,
   "model": "gpt-6.1-sol",
