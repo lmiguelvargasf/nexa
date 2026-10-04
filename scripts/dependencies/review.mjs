@@ -381,6 +381,15 @@ export async function prepare(directory, env = process.env) {
           paths.add(path);
       }
       if (change.manager === "mise") paths.add("mise.toml");
+      if (change.manager === "mise") {
+        for (const path of ["mise.lock", "README.md", "scripts/setup.sh"])
+          if (git("ls-tree", "--name-only", identity.headSha, "--", path))
+            paths.add(path);
+        if (change.name === "prek")
+          for (const path of ["prek.toml", "scripts/skills/update.mjs"])
+            if (git("ls-tree", "--name-only", identity.headSha, "--", path))
+              paths.add(path);
+      }
       if (change.manager === "github-actions") paths.add(change.path);
       for (const path of [...paths]) {
         const stem = path.replace(/\.[jt]sx?$/, "");

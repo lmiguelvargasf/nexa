@@ -52,6 +52,16 @@ function fixture({
       "import { clsx } from 'clsx';\n",
     );
   mkdirSync(join(directory, ".github/workflows"));
+  mkdirSync(join(directory, "scripts/skills"), { recursive: true });
+  writeFileSync(
+    join(directory, "prek.toml"),
+    'minimum_prek_version = "2.1.0"\n',
+  );
+  writeFileSync(join(directory, "scripts/setup.sh"), "task hooks:install\n");
+  writeFileSync(
+    join(directory, "scripts/skills/update.mjs"),
+    'throw new Error("TOOL_CONSUMER_MUST_NOT_RUN");\n',
+  );
   writeFileSync(
     join(directory, ".github/workflows/ci.yml"),
     "name: CI\non: pull_request\njobs:\n  verify:\n    steps:\n      - run: task verify:all\n",
@@ -102,11 +112,11 @@ function fixture({
     if (manager === "mise") {
       writeFileSync(
         join(directory, "mise.toml"),
-        `[tools]\ngh = "${version}"\n`,
+        `[tools]\nprek = "${version}"\n`,
       );
       writeFileSync(
         join(directory, "mise.lock"),
-        `[[tools.gh]]\nversion = "${version}"\nbackend = "aqua:cli/cli"\n[tools.gh."platforms.linux-x64"]\nchecksum = "sha256:${"a".repeat(64)}"\nurl = "https://github.com/cli/cli/releases/download/v${version}/gh_${version}_linux_amd64.tar.gz"\n`,
+        `[[tools.prek]]\nversion = "${version}"\nbackend = "aqua:j178/prek"\n[tools.prek."platforms.linux-x64"]\nchecksum = "sha256:${"a".repeat(64)}"\nurl = "https://github.com/j178/prek/releases/download/v${version}/prek_linux_amd64.tar.gz"\n`,
       );
     }
     if (manager === "github-actions")
@@ -271,7 +281,18 @@ async function withFixture(t, callback, options) {
         body: "Fix conditional class handling",
         html_url: "https://github.com/lukeed/clsx/releases/tag/v2.1.1",
       };
-    else throw new Error(`Unexpected fixture request ${path}`);
+    else if (path.endsWith("/contents/CHANGELOG.md")) {
+      assert.equal(new URL(url).searchParams.get("ref"), "b".repeat(40));
+      const content = "## 2.1.1\nComplete tool changes\n## 2.1.0\nOld\n";
+      value = {
+        type: "file",
+        path: "CHANGELOG.md",
+        encoding: "base64",
+        sha: "c".repeat(40),
+        size: Buffer.byteLength(content),
+        content: Buffer.from(content).toString("base64"),
+      };
+    } else throw new Error(`Unexpected fixture request ${path}`);
     return new Response(JSON.stringify(value));
   });
   process.chdir(f.directory);
@@ -477,6 +498,19 @@ for (const manager of ["mise", "github-actions"])
         assert.equal(evidence.releases[0].baseCommit, "a".repeat(40));
         assert.equal(evidence.releases[0].headCommit, "b".repeat(40));
         assert.ok(evidence.usage.length);
+        if (manager === "mise") {
+          for (const path of [
+            "mise.lock",
+            "prek.toml",
+            "scripts/setup.sh",
+            "scripts/skills/update.mjs",
+          ])
+            assert.ok(
+              evidence.usage.some((entry) => entry.path === path),
+              path,
+            );
+          assert.match(evidence.releases[0].notes, /Complete tool changes/);
+        }
         assert.equal(
           existsSync(join(f.directory, "INSTALL_HOOK_MUST_NOT_RUN")),
           false,

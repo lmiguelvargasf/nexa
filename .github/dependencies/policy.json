@@ -1,14 +1,14 @@
 {
-  "version": 4,
+  "version": 5,
   "mode": "automatic",
   "automaticMerging": true,
   "model": "gpt-6.1-sol",
   "effort": "medium",
   "serviceTier": "default",
-  "maxContextBytes": 65536,
+  "maxContextBytes": 98304,
   "maxResultBytes": 8192,
   "maxChangedPackages": 5,
-  "maxReleaseBytes": 12000,
+  "maxReleaseBytes": 24576,
   "pricesPerMillionTokens": {
     "input": 2,
     "cachedInput": 0.1,

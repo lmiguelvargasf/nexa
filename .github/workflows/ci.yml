@@ -55,7 +55,7 @@ jobs:
           persist-credentials: false
       - uses: jdx/mise-action@v4
         with:
-          install_args: node bun task
+          install_args: node bun task prek
           cache: true
       - uses: actions/cache@v4
         with:
@@ -64,6 +64,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
+      - name: Verify locked hook tooling and repository hooks
+        run: |
+          mise install --locked prek
+          prek --version
+          task hooks:run
+          git diff --exit-code HEAD --
       - name: Install browser binaries and system libraries
         run: bunx --no-install playwright install --with-deps
       - name: Run validation and production browser smoke
