@@ -109,6 +109,8 @@ function fixture({
   };
   const writeDependency = (version) => {
     write(version);
+    if (manager === "none")
+      writeFileSync(join(directory, "README.md"), `Docs ${version}\n`);
     if (manager === "mise") {
       writeFileSync(
         join(directory, "mise.toml"),
@@ -231,7 +233,7 @@ async function withFixture(t, callback, options) {
         jobs: [
           "Validation scope",
           "Pre-PR validation",
-          "Dependency validation",
+          f.aggregateName ?? "CI validation",
         ].map((name) => ({ name, status: "completed", conclusion: "success" })),
       };
     else if (path.endsWith("/actions/runs/123/artifacts"))
@@ -518,3 +520,52 @@ for (const manager of ["mise", "github-actions"])
       },
       { manager },
     ));
+
+test("non-dependency Renovate branches skip evidence, comments and paid preparation", async (t) =>
+  withFixture(
+    t,
+    async (f, calls) => {
+      const directory = join(f.directory, "prepared");
+      await prepare(directory, f.env);
+      assert.match(
+        readFileSync(f.env.GITHUB_STEP_SUMMARY, "utf8"),
+        /No AI review performed/,
+      );
+      assert.equal(existsSync(join(directory, "report.json")), false);
+      assert.equal(existsSync(join(directory, "prompt.md")), false);
+      assert.ok(
+        !calls.some(
+          ({ path }) => path.includes("/actions/") || path.includes("/issues/"),
+        ),
+      );
+      const output = readFileSync(process.env.GITHUB_OUTPUT, "utf8");
+      assert.match(output, /ready=false/);
+      assert.doesNotMatch(output, /pr_number=/);
+    },
+    { manager: "none" },
+  ));
+
+test("review preparation requires CI validation, not the compatibility alias", async (t) =>
+  withFixture(t, async (f) => {
+    f.aggregateName = "Dependency validation";
+    await assert.rejects(
+      prepare(join(f.directory, "prepared"), f.env),
+      /Required CI job missing or failed: CI validation/,
+    );
+  }));
+
+test("unreadable review applicability cannot become an empty no-review result", async (t) =>
+  withFixture(
+    t,
+    async (f, calls) => {
+      f.pr.head.sha = "f".repeat(40);
+      await assert.rejects(prepare(join(f.directory, "prepared"), f.env));
+      assert.ok(
+        !calls.some(
+          ({ path }) => path.includes("/actions/") || path.includes("/issues/"),
+        ),
+      );
+      assert.equal(existsSync(f.env.GITHUB_STEP_SUMMARY), false);
+    },
+    { manager: "none" },
+  ));

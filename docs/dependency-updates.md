@@ -1,5 +1,12 @@
 # Dependency updates
 
+Normal CI validates every PR. Dependency policy applies only when the actual PR
+diff changes dependencies or their resolution/install configuration; a bounded
+Sol review remains restricted to qualifying Renovate updates. Application-only,
+documentation-only, and other non-dependency PRs do not require the dependency
+policy's custom human attestation. GitHub's general review and merge rules still
+apply.
+
 Renovate prepares updates; CI validates them; a bounded Sol review assesses compatibility.
 Stable same-major minor and patch updates can merge automatically for **every dependency**:
 Bun application/development/optional/peer packages and version-only overrides,
@@ -112,29 +119,44 @@ now fail by default. Artifact names, retention and provenance checks are unchang
 Node.js 24; cache paths, keys and restore keys stay unchanged. These major upgrades
 require manual review under the dependency policy above.
 
-The always-present **Dependency validation** job aggregates scope, application
-validation, and database validation. Required checks include frozen installation,
-format/lint, types, unit/automation tests, production build, all three browser smoke
-projects, and auditing. Database validation runs for dependency/toolchain,
+The always-present **CI validation** job aggregates scope, application
+validation, and database validation for every PR. Required checks include frozen
+installation, format/lint, types, unit/automation tests, production build, all three
+browser smoke projects, and auditing. Database validation runs for dependency/toolchain,
 Supabase, and relevant CI changes, through a reusable workflow. A legitimately
 inapplicable database job is skipped; failure, cancellation, a missing result, or a
 skipped required job fails the aggregate. Absent pgTAP tests do not establish
-tested database behavior.
+tested database behavior. The scope job reports dependency applicability with the
+exact head/base/tested SHAs in its summary. That report is diagnostic: trusted
+follow-up workflows recompute applicability from Git objects rather than trusting
+PR-produced classification or artifacts.
 
-After this workflow has produced a successful check, configure a ruleset for the
-repository's default branch in GitHub Settings → Rules → Rulesets:
+The temporary **Dependency validation** job is a compatibility alias. It always
+runs after **CI validation** and succeeds only when that aggregate succeeds;
+failure, cancellation, skipping, and missing results cannot produce a successful
+alias. Preserve the alias throughout the required-check migration:
 
-- Require a pull request and **Dependency validation** from GitHub Actions.
-- Require branches to be up to date before merging (strict checks).
-- Preserve the repository's other protections; do not add a bot bypass.
-- Enable repository automatic merging only after the gate and required checks are verified.
+1. Publish the workflow with both names and verify a successful hosted
+   **CI validation** check on the current implementation PR.
+2. In the existing default-branch ruleset, add **CI validation** from GitHub Actions
+   (integration 15368), keeping **Dependency validation** and
+   **Dependency merge policy** required until the new check is verified.
+3. Verify the published required-check configuration and GitHub's PR check
+   association, then remove only the old **Dependency validation** requirement.
+   Keep the compatibility job until trusted default-branch consumers have moved
+   to **CI validation**. Existing default-branch consumers still require the
+   legacy name; updated consumers require **CI validation**. The compatibility
+   job satisfies the old consumers without weakening either assertion.
 
-Both **Dependency validation** and **Dependency merge policy** must be required
-from GitHub Actions (integration 15368), with strict up-to-date branches, existing
-PR/deletion/force-push protections, and no bypass actors. These settings are
-configured in GitHub, not enabled by workflow YAML. Verify them in each destination
-repository. The human completion path has been demonstrated with both required
-statuses passing; its revision-bound approval does not waive CI.
+The final required checks are **CI validation** and **Dependency merge policy**
+from GitHub Actions (integration 15368). Keep strict up-to-date branches, existing
+PR/review/deletion/force-push protections, and no bypass actors throughout. These
+settings are configured in GitHub, not enabled by workflow YAML. Never remove the
+old CI requirement before the replacement is available, temporarily relax checks,
+or add a bot bypass to complete the rollout. Record hosted check identities and
+ruleset reads as rollout evidence; local fixtures do not prove deployment.
+Verify this migration in each destination repository. Enable repository automatic
+merging only after the gate and required checks are verified.
 
 The advisory **Dependency review** workflow must
 not be a required check: missing funding or AI `NEEDS_HUMAN` must not prevent a
@@ -260,22 +282,60 @@ immediately before publishing success. Strict branch protection and GitHub nativ
 auto-merge provide the final up-to-date check and merge; there is no custom queue
 or merge API call.
 
-Every successful decision requires the latest current CI to pass, all aggregate
-jobs to succeed, and the tested and current GitHub synthetic merge commits to
-have the exact current head/base parents. GitHub may regenerate the synthetic
-commit with a different timestamp; a different SHA qualifies only when both
-commits also have the identical complete Git tree. Missing tree data or changed
-content blocks approval. The original CI-tested SHA stays in the review and
-approval identity. While current-revision CI has not started or is queued/running,
-the policy stays pending and still blocks merging. CI start events also reevaluate
-reruns so a previous failure can return to pending. Completed unsuccessful CI and
-invalid or missing validation/review evidence produce a failing status with a link
-to the workflow summary. Legitimately inapplicable database checks remain handled
-by **Dependency validation**.
+Applicability is independent of author, branch, labels, and automatic-merge
+eligibility. The trusted classifier compares the complete PR diff from its unique
+merge base to the exact current head and reads files as data. It classifies these
+changes as applicable:
 
-Once required, the gate applies to all PRs to the default branch. Human completion
-uses an explicit revision-bound attestation, including for ineligible updates and
-AI failures. Review the diff and CI yourself, then select Actions → Evaluate
+- Package dependency declarations (including additions/removals, peer metadata,
+  overrides/resolutions, patched dependencies, and bundled dependencies), package manager/engine
+  declarations, and workspace/catalog/install trust or platform configuration in
+  `package.json`. Changes limited to scripts or ordinary package metadata do not
+  themselves create dependency scope.
+- Any `bun.lock` or `bun.lockb` content change, including standalone transitive
+  changes, semantic changes to the `bunfig.toml` install table, and patch files
+  under `patches/` or with the `.patch` extension.
+- Tool declarations, plugins, or lockfile settings in `mise.toml` (including
+  supported environment/local variants), and any `mise.lock` content change.
+- Added, removed, or changed remote GitHub Action `uses` references (including
+  Docker references) in workflows and action manifests, Action lockfiles,
+  container/service images, runner/runtime declarations, and tool-version inputs
+  such as `codex-version`. Ordinary workflow logic, comments, or formatting
+  changes alone do not create dependency scope; duplicate existing runtimes do
+  not introduce a new version.
+
+Mixed code/dependency changes, human-authored updates, major/prerelease updates,
+and other ineligible dependency changes remain applicable. The classifier is
+conservative about install policy and intentionally separate from the narrower
+automatic-merge rules. Missing/ambiguous Git ancestry, unreadable evidence, or invalid supported data
+fails closed. Complete readable YAML outside the bounded parser's syntax is
+conservatively applicable and requires the existing manual review path. Neither
+case can produce a non-applicable bypass.
+
+For a current non-dependency PR, **Dependency merge policy** publishes an explicit
+successful **not applicable** decision on the current head and synthetic merge
+revision, rechecking their identity before publishing. It does not load dependency
+review evidence, invoke AI, or require the custom human attestation. This lightweight
+status is still visible because GitHub requires its context for all PRs. It does
+not assert that an AI review occurred or replace **CI validation** or general
+GitHub review protections. New head/base revisions trigger fresh classification.
+
+For an applicable dependency PR, every successful decision requires the latest
+current CI to pass, all aggregate jobs to succeed, and the tested and current
+GitHub synthetic merge commits to have the exact current head/base parents.
+GitHub may regenerate the synthetic commit with a different timestamp; a different
+SHA qualifies only when both commits also have the identical complete Git tree.
+Missing tree data or changed content blocks approval. The original CI-tested SHA
+stays in the review and approval identity. While current-revision CI has not
+started or is queued/running, the policy stays pending and still blocks merging.
+CI start events also reevaluate reruns so a previous failure can return to pending.
+Completed unsuccessful CI and invalid or missing validation/review evidence produce
+a failing status with a link to the workflow summary. Legitimately inapplicable
+database checks remain handled by **CI validation**.
+
+Human completion of an applicable dependency PR uses an explicit revision-bound
+attestation, including for ineligible updates and AI failures. Review the diff and
+CI yourself, then select Actions → Evaluate
 dependency merge policy → Run workflow on **main**, set the PR number, check
 `approve`, and enter the full reviewed head/base SHAs. The CLI equivalent is:
 
@@ -314,7 +374,8 @@ requires an intentional rerun. No review database is introduced.
    demonstrate both its failing unapproved status and successful human path, and
    verify GitHub associates the explicit status with that PR head.
 2. Add **Dependency merge policy** from GitHub Actions (integration 15368) as a
-   required status in the existing main ruleset. Preserve **Dependency validation**,
+   required status in the existing main ruleset. Preserve **CI validation**
+   (and the legacy **Dependency validation** requirement during its migration),
    strict up-to-date branches, PR requirements, and no bypass actors. Do this only
    after the status has been produced successfully; requiring an unpublished
    workflow would deadlock its own implementation PR.
