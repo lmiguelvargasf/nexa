@@ -4,9 +4,9 @@ import test from "node:test";
 import {
   assertIdentity,
   assertValidation,
+  bunEligibility,
   databaseApplicable,
   estimateCost,
-  helperEligibility,
   lockedChanges,
   parseLock,
   reviewIdentity,
@@ -169,8 +169,8 @@ test("only same-repository Renovate with current tested head/base is trusted", (
   );
 });
 
-test("stable helpers qualify only with consistent source, declarations and isolated lock changes", () => {
-  assert.equal(helperEligibility(fixture(), ["clsx"]).candidate, true);
+test("package updates qualify only with consistent source and declarations", () => {
+  assert.equal(bunEligibility(fixture()).candidate, true);
   for (const mutate of [
     (f) => {
       f.paths.push("src/app/page.tsx");
@@ -189,13 +189,7 @@ test("stable helpers qualify only with consistent source, declarations and isola
       f.after.trustedDependencies = ["new-install-hook"];
     },
     (f) => {
-      f.newLock.packages.transitive = entry("transitive", "1.0.1");
-    },
-    (f) => {
       f.newLock.workspaces[""].dependencies = { clsx: "^2.1.0" };
-    },
-    (f) => {
-      f.newLock.packages.clsx[2] = { dependencies: { dangerous: "1.0.0" } };
     },
     (f) => {
       f.newLock.packages.clsx[1] = "https://example.com/untrusted.tgz";
@@ -209,11 +203,11 @@ test("stable helpers qualify only with consistent source, declarations and isola
   ]) {
     const f = fixture();
     mutate(f);
-    assert.equal(helperEligibility(f, ["clsx"]).candidate, false);
+    assert.equal(bunEligibility(f).candidate, false);
   }
 });
 
-test("stable helper minor/patch declarations accept valid exact, caret and tilde resolutions", () => {
+test("stable dependency minor/patch declarations accept valid exact, caret and tilde resolutions", () => {
   for (const [before, after, oldVersion, newVersion] of [
     ["^2.1.0", "^2.2.0", "2.1.5", "2.2.0"],
     ["^2.9.9", "^2.10.0", "2.9.9", "2.10.0"],
@@ -229,23 +223,20 @@ test("stable helper minor/patch declarations accept valid exact, caret and tilde
     f.after.dependencies.clsx = after;
     f.oldLock.packages.clsx = entry("clsx", oldVersion);
     f.newLock.packages.clsx = entry("clsx", newVersion);
-    assert.equal(helperEligibility(f, ["clsx"]).candidate, true);
+    assert.equal(bunEligibility(f).candidate, true);
   }
 });
 
-test("declaration-only tailwind minor updates can qualify alongside helper patches", () => {
+test("declaration-only tailwind minor updates can qualify alongside other package patches", () => {
   const f = fixture();
   f.before.dependencies["tailwind-merge"] = "^3.6.0";
   f.after.dependencies["tailwind-merge"] = "^3.7.0";
   f.oldLock.packages["tailwind-merge"] = entry("tailwind-merge", "3.7.0");
   f.newLock.packages["tailwind-merge"] = entry("tailwind-merge", "3.7.0");
-  assert.equal(
-    helperEligibility(f, ["clsx", "tailwind-merge"]).candidate,
-    true,
-  );
+  assert.equal(bunEligibility(f).candidate, true);
 });
 
-test("valid declaration-only Zod minor updates remain outside the helper allowlist", () => {
+test("valid declaration-only Zod minor updates qualify without an allowlist", () => {
   const f = fixture();
   for (const manifest of [f.before, f.after]) delete manifest.dependencies.clsx;
   for (const lock of [f.oldLock, f.newLock]) delete lock.packages.clsx;
@@ -253,10 +244,9 @@ test("valid declaration-only Zod minor updates remain outside the helper allowli
   f.after.dependencies.zod = "^4.6.5";
   f.oldLock.packages.zod = entry("zod", "4.6.5");
   f.newLock.packages.zod = entry("zod", "4.6.5");
-  const result = helperEligibility(f, ["clsx", "tailwind-merge"]);
-  assert.equal(result.candidate, false);
-  assert.equal(result.reasons.length, 1);
-  assert.match(result.reasons[0], /zod: requires human review/);
+  const result = bunEligibility(f);
+  assert.equal(result.candidate, true);
+  assert.deepEqual(result.reasons, []);
 });
 
 test("out-of-range, unstable and downgraded resolutions remain manual", () => {
@@ -280,7 +270,7 @@ test("out-of-range, unstable and downgraded resolutions remain manual", () => {
     f.after.dependencies.clsx = after;
     f.oldLock.packages.clsx = entry("clsx", oldVersion);
     f.newLock.packages.clsx = entry("clsx", newVersion);
-    assert.equal(helperEligibility(f, ["clsx"]).candidate, false);
+    assert.equal(bunEligibility(f).candidate, false);
   }
 });
 
@@ -307,14 +297,13 @@ test("declaration-only updates reject changed same-version integrity and missing
     f.oldLock.packages.clsx = entry("clsx", "2.2.0");
     f.newLock.packages.clsx = entry("clsx", "2.2.0");
     change(f);
-    assert.equal(helperEligibility(f, ["clsx"]).candidate, false);
+    assert.equal(bunEligibility(f).candidate, false);
   }
 });
 
-test("major, prerelease, 0.x, downgrades, range changes and grouped protected changes require humans", () => {
+test("major, prerelease, downgrades, malformed declarations and operator changes require humans", () => {
   for (const [before, after] of [
     ["^2.1.0", "^3.0.0"],
-    ["^0.1.0", "^0.1.1"],
     ["^2.1.0", "^2.1.1-beta.1"],
     ["^2.1.0", "~2.1.1"],
     ["^2.2.0", "^2.1.9"],
@@ -326,14 +315,14 @@ test("major, prerelease, 0.x, downgrades, range changes and grouped protected ch
     const f = fixture();
     f.before.dependencies.clsx = before;
     f.after.dependencies.clsx = after;
-    assert.equal(helperEligibility(f, ["clsx"]).candidate, false);
+    assert.equal(bunEligibility(f).candidate, false);
   }
   const f = fixture();
   f.before.dependencies.next = "^16.2.0";
   f.after.dependencies.next = "^16.2.1";
   f.oldLock.packages.next = entry("next", "16.2.0");
   f.newLock.packages.next = entry("next", "16.2.1");
-  assert.equal(helperEligibility(f, ["clsx"]).candidate, false);
+  assert.equal(bunEligibility(f).candidate, true);
 });
 
 test("Bun trailing commas are parsed as data and quoted text is preserved", () => {

@@ -216,6 +216,101 @@ export async function releaseEvidence(
   throw new Error("No release notes or exact versioned source comparison");
 }
 
+export async function upstreamEvidence(
+  change,
+  maxBytes,
+  clientForRepo = (repo) => githubClient(repo),
+) {
+  const client = clientForRepo(change.repository);
+  const old = await client.api(`commits/${encodeURIComponent(change.oldRef)}`, {
+    maxBytes: 300_000,
+  });
+  const next = await client.api(
+    `commits/${encodeURIComponent(change.newRef)}`,
+    { maxBytes: 300_000 },
+  );
+  if (
+    !/^[a-f0-9]{40}$/.test(old.sha ?? "") ||
+    !/^[a-f0-9]{40}$/.test(next.sha ?? "") ||
+    (/^[a-f0-9]{40}$/.test(change.newRef) && next.sha !== change.newRef)
+  )
+    throw new Error("Invalid upstream commit identity");
+  if (change.manager === "github-actions" && change.newTag) {
+    const tagged = await client.api(
+      `commits/${encodeURIComponent(change.newTag)}`,
+      { maxBytes: 300_000 },
+    );
+    if (tagged.sha !== next.sha)
+      throw new Error("Action digest does not match its annotated version tag");
+  }
+  const identity = {
+    package: change.name,
+    repository: change.repository,
+    beforeRef: change.oldRef,
+    afterRef: change.newRef,
+    baseCommit: old.sha,
+    headCommit: next.sha,
+  };
+  if (old.sha === next.sha)
+    return {
+      ...identity,
+      unchangedSource: true,
+      notes:
+        "Both upstream references resolve to the identical commit; this only pins the existing Action source.",
+    };
+  const tag = change.manager === "mise" ? change.newRef : change.newTag;
+  if (
+    tag &&
+    !(change.manager === "github-actions" && change.before === change.after)
+  ) {
+    try {
+      const release = await client.api(
+        `releases/tags/${encodeURIComponent(tag)}`,
+        { maxBytes: 100_000 },
+      );
+      if (release.draft || release.prerelease)
+        throw new Error(
+          "Upstream release is draft or prerelease; human review required",
+        );
+      if (release.body?.trim()) {
+        if (Buffer.byteLength(release.body) > maxBytes)
+          throw new Error("Release notes exceed the context limit");
+        return {
+          ...identity,
+          releaseUrl: release.html_url,
+          tag,
+          notes: release.body,
+        };
+      }
+    } catch (error) {
+      if (!error.message.includes("HTTP 404")) throw error;
+    }
+  }
+  const comparison = await client.api(`compare/${old.sha}...${next.sha}`, {
+    maxBytes: 300_000,
+  });
+  if (
+    comparison.status !== "ahead" ||
+    !comparison.files?.length ||
+    comparison.files.length > 10 ||
+    comparison.total_commits !== comparison.commits?.length ||
+    comparison.files.some((file) => !file.patch)
+  )
+    throw new Error("Versioned upstream comparison is incomplete or too large");
+  const result = {
+    ...identity,
+    comparisonUrl: comparison.html_url,
+    files: comparison.files.map(({ filename, status, patch }) => ({
+      filename,
+      status,
+      patch,
+    })),
+  };
+  if (Buffer.byteLength(JSON.stringify(result)) > maxBytes)
+    throw new Error("Upstream source exceeds the context limit");
+  return result;
+}
+
 export function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
 }

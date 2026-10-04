@@ -97,14 +97,17 @@ export function stable(value) {
 }
 const equal = (a, b) => JSON.stringify(stable(a)) === JSON.stringify(stable(b));
 
+export const DEPENDENCY_SECTIONS = [
+  "dependencies",
+  "devDependencies",
+  "optionalDependencies",
+  "peerDependencies",
+  "overrides",
+];
+
 export function dependencyChanges(before, after) {
   const changes = [];
-  for (const section of [
-    "dependencies",
-    "devDependencies",
-    "optionalDependencies",
-    "peerDependencies",
-  ]) {
+  for (const section of DEPENDENCY_SECTIONS) {
     const old = before[section] ?? {};
     const next = after[section] ?? {};
     for (const name of new Set([...Object.keys(old), ...Object.keys(next)])) {
@@ -127,7 +130,13 @@ export function lockedChanges(changes, oldLock, newLock) {
         !/^(?:\^|~)?\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(declaration ?? "")
       )
         throw new Error(`${change.name}: unsupported dependency declaration`);
-      const entry = lock?.packages?.[change.name];
+      const matches = Object.values(lock?.packages ?? {}).filter(
+        (entry) =>
+          Array.isArray(entry) && entry[0]?.startsWith(`${change.name}@`),
+      );
+      const entry =
+        lock?.packages?.[change.name] ??
+        (matches.length === 1 ? matches[0] : null);
       const prefix = `${change.name}@`;
       if (
         !Array.isArray(entry) ||
@@ -151,140 +160,178 @@ export function lockedChanges(changes, oldLock, newLock) {
 }
 
 // Deliberately support only simple stable exact/caret/tilde declarations.
-const version = (value) => {
+export const version = (value) => {
   if (typeof value !== "string") return null;
-  const match = /^(\^|~)?([1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(value);
+  const match = /^(\^|~)?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(value);
   if (!match || match[0] !== value) return null;
   const parts = match.slice(2).map(Number);
   if (!parts.every(Number.isSafeInteger)) return null;
   return { operator: match[1] ?? "", parts };
 };
-const compareVersions = (a, b) =>
+export const compareVersions = (a, b) =>
   a.parts
     .map((part, index) => part - b.parts[index])
     .find((diff) => diff !== 0) ?? 0;
-const satisfies = (resolved, declaration) => {
+export const satisfies = (resolved, declaration) => {
   if (resolved.parts[0] !== declaration.parts[0]) return false;
   const comparison = compareVersions(resolved, declaration);
   if (comparison < 0) return false;
-  if (declaration.operator === "^") return true;
+  if (declaration.operator === "^") {
+    if (declaration.parts[0] > 0) return true;
+    if (declaration.parts[1] > 0)
+      return resolved.parts[1] === declaration.parts[1];
+    return comparison === 0;
+  }
   if (declaration.operator === "~")
     return resolved.parts[1] === declaration.parts[1];
   return comparison === 0;
 };
 
-export function helperEligibility(
-  { paths, before, after, oldLock, newLock },
-  allowlist,
-) {
+export function bunEligibility({ paths, before, after, oldLock, newLock }) {
   const reasons = [];
   const changes = dependencyChanges(before, after);
   if (
-    paths.length !== 2 ||
-    !paths.includes("package.json") ||
-    !paths.includes("bun.lock")
-  ) {
-    reasons.push("Only package.json and bun.lock may change.");
-  }
+    !changes.length &&
+    equal(before.packageManager, after.packageManager) &&
+    equal(before.engines, after.engines)
+  )
+    reasons.push("No declared dependency update.");
+  if (paths.some((path) => !["package.json", "bun.lock"].includes(path)))
+    reasons.push("Only dependency manifests and lockfiles may change.");
   const strip = (manifest) => {
     const result = structuredClone(manifest);
-    for (const section of [
-      "dependencies",
-      "devDependencies",
-      "optionalDependencies",
-      "peerDependencies",
-    ])
-      delete result[section];
+    for (const section of DEPENDENCY_SECTIONS) delete result[section];
+    // Runtime declarations are checked independently against mise pins.
+    delete result.packageManager;
+    delete result.engines;
     return result;
   };
   if (!equal(strip(before), strip(after)))
-    reasons.push("Manifest policy, overrides, scripts, or toolchain changed.");
-  if (!changes.length) reasons.push("No direct helper update.");
+    reasons.push(
+      "Manifest scripts, install trust, or unrelated fields changed.",
+    );
   for (const change of changes) {
     const old = version(change.before);
     const next = version(change.after);
     if (
-      !["dependencies", "devDependencies"].includes(change.section) ||
-      !allowlist.includes(change.name) ||
       !old ||
       !next ||
       old.operator !== next.operator ||
       old.parts[0] !== next.parts[0] ||
       compareVersions(next, old) <= 0
-    ) {
+    )
       reasons.push(
-        `${change.name}: requires human review (only stable helper minor/patch updates qualify).`,
+        `${change.name}: only stable same-major minor/patch declarations qualify.`,
       );
-    }
   }
-  const changedNames = changes.map(({ name }) => name);
-  if (
-    !equal(oldLock?.workspaces?.[""]?.dependencies, before.dependencies) ||
-    !equal(newLock?.workspaces?.[""]?.dependencies, after.dependencies) ||
-    !equal(
-      oldLock?.workspaces?.[""]?.devDependencies,
-      before.devDependencies,
-    ) ||
-    !equal(newLock?.workspaces?.[""]?.devDependencies, after.devDependencies)
-  ) {
-    reasons.push("Lockfile workspace declarations are inconsistent.");
+  for (const [manifest, lock] of [
+    [before, oldLock],
+    [after, newLock],
+  ]) {
+    for (const section of DEPENDENCY_SECTIONS) {
+      const actual =
+        section === "overrides"
+          ? lock?.overrides
+          : lock?.workspaces?.[""]?.[section];
+      if (!equal(actual ?? {}, manifest[section] ?? {}))
+        reasons.push(`Lockfile ${section} declarations are inconsistent.`);
+    }
   }
   const stripLock = (lock) => {
     const result = structuredClone(lock ?? {});
-    delete result.workspaces?.[""]?.dependencies;
-    delete result.workspaces?.[""]?.devDependencies;
-    for (const name of changedNames) delete result.packages?.[name];
+    for (const section of DEPENDENCY_SECTIONS)
+      delete result.workspaces?.[""]?.[section];
+    delete result.overrides;
+    delete result.packages;
     return result;
   };
   if (!equal(stripLock(oldLock), stripLock(newLock)))
-    reasons.push("Unrelated or transitive lockfile metadata changed.");
+    reasons.push("Lockfile trust, workspace configuration, or format changed.");
   for (const change of changes) {
     const resolved = [];
-    for (const [lock, declaration] of [
-      [oldLock, change.before],
-      [newLock, change.after],
+    for (const [lock, declaration, manifest] of [
+      [oldLock, change.before, before],
+      [newLock, change.after, after],
     ]) {
-      const entry = lock?.packages?.[change.name];
-      const parsed = version(declaration);
-      const prefix = `${change.name}@`;
-      if (
-        !Array.isArray(entry) ||
-        entry.length !== 4 ||
-        typeof entry[0] !== "string" ||
-        !entry[0].startsWith(prefix) ||
-        entry[1] !== "" ||
-        !equal(entry[2], {}) ||
-        typeof entry[3] !== "string" ||
-        !/^sha512-[A-Za-z0-9+/=]+$/.test(entry[3])
-      ) {
-        reasons.push(
-          `${change.name}: unsupported source, integrity, or dependency metadata.`,
+      const entries =
+        change.section === "overrides"
+          ? Object.values(lock?.packages ?? {}).filter(
+              (entry) =>
+                Array.isArray(entry) && entry[0]?.startsWith(`${change.name}@`),
+            )
+          : [lock?.packages?.[change.name]];
+      if (!entries.length)
+        reasons.push(`${change.name}: missing locked package.`);
+      for (const entry of entries) {
+        const parsed = version(
+          manifest.overrides?.[change.name] ?? declaration,
         );
-        continue;
+        const prefix = `${change.name}@`;
+        if (!registryEntry(entry) || !entry[0].startsWith(prefix)) {
+          reasons.push(
+            `${change.name}: unsupported source, integrity, or dependency metadata.`,
+          );
+          continue;
+        }
+        const locked = version(entry[0].slice(prefix.length));
+        if (!locked || !parsed || !satisfies(locked, parsed)) {
+          reasons.push(
+            `${change.name}: locked version does not satisfy its supported stable declaration.`,
+          );
+          continue;
+        }
+        if (change.section !== "overrides") resolved.push(locked);
       }
-      const locked = version(entry[0].slice(prefix.length));
-      if (!locked || locked.operator || !parsed || !satisfies(locked, parsed)) {
-        reasons.push(
-          `${change.name}: locked version does not satisfy its supported stable declaration.`,
-        );
-        continue;
-      }
-      resolved.push(locked);
     }
-    if (resolved.length === 2) {
-      const comparison = compareVersions(resolved[1], resolved[0]);
-      if (resolved[0].parts[0] !== resolved[1].parts[0] || comparison < 0)
-        reasons.push(`${change.name}: resolved major change or downgrade.`);
-      if (
-        comparison === 0 &&
-        !equal(oldLock.packages[change.name], newLock.packages[change.name])
-      )
-        reasons.push(
-          `${change.name}: same-version locked package data changed.`,
-        );
-    }
+    if (
+      resolved.length === 2 &&
+      (resolved[0].parts[0] !== resolved[1].parts[0] ||
+        compareVersions(resolved[1], resolved[0]) < 0)
+    )
+      reasons.push(`${change.name}: resolved major change or downgrade.`);
   }
-  return { candidate: reasons.length === 0, reasons, changes };
+  // Transitive resolution is reviewable. Unsupported sources, invalid integrity
+  // and altered data at the same version still cannot silently qualify.
+  for (const name of new Set([
+    ...Object.keys(oldLock?.packages ?? {}),
+    ...Object.keys(newLock?.packages ?? {}),
+  ])) {
+    const old = oldLock?.packages?.[name];
+    const next = newLock?.packages?.[name];
+    if (equal(old, next)) continue;
+    if ((old && !registryEntry(old)) || (next && !registryEntry(next)))
+      reasons.push(`${name}: unsupported changed locked package.`);
+    if (old && next && old[0] === next[0])
+      reasons.push(`${name}: same-version locked package data changed.`);
+  }
+  return {
+    candidate: reasons.length === 0,
+    reasons,
+    changes: changes.map((change) => ({ ...change, manager: "bun" })),
+  };
+}
+
+export function registryEntry(entry) {
+  const resolved =
+    typeof entry?.[0] === "string"
+      ? version(entry[0].slice(entry[0].lastIndexOf("@") + 1))
+      : null;
+  return (
+    Array.isArray(entry) &&
+    entry.length === 4 &&
+    typeof entry[0] === "string" &&
+    resolved &&
+    !resolved.operator &&
+    /^(@[a-z0-9_.-]+\/)?[a-z0-9_.-]+@(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/i.test(
+      entry[0],
+    ) &&
+    entry[1] === "" &&
+    entry[2] &&
+    typeof entry[2] === "object" &&
+    !Array.isArray(entry[2]) &&
+    typeof entry[3] === "string" &&
+    /^sha512-[A-Za-z0-9+/=]+$/.test(entry[3])
+  );
 }
 
 export function reviewIdentity(identity, policy, prompt, schema, config) {

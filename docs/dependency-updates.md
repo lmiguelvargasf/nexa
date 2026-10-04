@@ -1,15 +1,19 @@
 # Dependency updates
 
-Renovate prepares updates; CI validates them; a bounded Sol review assesses
-compatibility. Automatic merging is enabled only for stable minor and patch
-updates to `clsx` and `tailwind-merge`, following the owner's October 3 decision.
-The trusted merge gate independently requires eligibility, current applicable CI,
-and a complete current-policy Sol `PASS`. Other updates require human approval.
-Global Renovate `automerge` remains false; only the helper minor/patch rule
-enables it.
+Renovate prepares updates; CI validates them; a bounded Sol review assesses compatibility.
+Stable same-major minor and patch updates can merge automatically for **every dependency**:
+Bun application/development/optional/peer packages and version-only overrides,
+mise tools/runtimes, and GitHub Actions. Framework, auth, database, validation and
+payment packages have no category exclusion. Action version/digest pinning can
+also qualify. Major upgrades, prereleases, standalone lock maintenance, unrelated
+code changes and incomplete evidence require human review.
+
+Automatic merging always requires current applicable CI and a complete,
+current-policy `gpt-6.1-sol` / medium `PASS`. Renovate requests native PR merging;
+GitHub's required checks decide when it happens. Global Renovate `automerge`
+remains false, with explicit non-major and Action pin rules enabling it.
 GitHub repository auto-merge and `DEPENDENCY_AUTOMERGE_ENABLED=true` must also be
-set in the destination repository. A copied configuration alone does not activate
-merging. A real eligible native automatic merge has not yet been demonstrated.
+set in each destination repository; copying configuration does not activate it.
 
 ## Schedule and update sources
 
@@ -21,22 +25,35 @@ detected vulnerability PRs may bypass that cap and the weekly schedule.
 
 The configuration supports Bun manifests/lockfiles, mise pins/lockfiles, and
 GitHub Actions, including digest pinning. Related React/Next.js, AI SDK, email,
-Node, and Bun declarations are grouped. Major upgrades stay separate. Only
-`clsx` and `tailwind-merge` stable minor/patch updates can qualify for automatic
-merging; their classification alone is not approval. Other file changes,
-mixed/protected updates, 0.x/prerelease/major updates, changed scripts/trust/overrides,
-inconsistent lockfiles, and transitive changes require a human.
+Node and Bun declarations remain grouped. Every update in a group must qualify.
+Renovate's minor/patch label alone never authorizes a merge.
 
-The trusted gate supports stable exact, caret and tilde declarations, preserving
-that operator while increasing the minimum version within the same major (at
-least 1). Each locked version must satisfy its own declaration: exact means the
-same version, caret allows later versions in that major, and tilde allows later
-patches in that minor. Actual resolved versions must not downgrade or cross a
-major. Declaration-only updates qualify when the installed package entry is
-identical; a changed integrity/source/metadata entry at the same version requires
-a human. The gate checks every changed helper and keeps unrelated/transitive
-lockfile changes manual. Policy version 2 invalidates previous review identities;
-obtain fresh current CI and Sol review after deployment.
+The gate supports stable exact, caret and tilde package declarations, preserving
+the operator while increasing the minimum version within the same major.
+Resolved direct versions must satisfy their declaration/override, stay in that
+major and never downgrade. Caret ranges on 0.x use the SemVer range rules, not
+the entire zero major. **0.x minor/patch updates are included by owner decision;
+they can contain breaking changes**, so numeric eligibility is not compatibility
+approval. Declaration-only updates qualify with identical installed entries.
+Transitive additions/removals/version changes are supplied exhaustively to Sol;
+non-registry sources, invalid integrity, changed same-version data, install trust,
+workspace configuration or lock format require human review.
+
+Version-only overrides may qualify; adding/removing dependencies or changing
+scripts, trust, engines independently of a corresponding runtime update, and
+other manifest behavior cannot. mise updates must preserve settings, tasks,
+backends and platform/provenance policy, and provide synchronized exact pins and
+checksummed versioned lock URLs. Bun packageManager/engine and Node engine
+minimums track their mise updates. Standard-library Python 3.11+ `tomllib` reads
+TOML as data; dependency code is never evaluated to parse it.
+
+Action updates change only existing remote `uses` references and their version
+comments. Workflow commands, permissions, inputs, conditions and structure stay
+unchanged. Exact upstream commits are resolved; an immutable digest must match
+its annotated version tag. Sol receives upstream release notes or bounded exact
+source comparisons plus workflow consumers. Missing/large source evidence
+requires a human rather than a partial paid review. Policy version 3 invalidates
+old reviews; obtain fresh current CI and Sol PASS after deployment.
 
 Before accepting onboarding, verify a real Bun update changes both `package.json`
 and `bun.lock` and a real tool update keeps `packageManager`/`engines`, `mise.toml`,
@@ -84,7 +101,7 @@ repository's default branch in GitHub Settings → Rules → Rulesets:
 - Require a pull request and **Dependency validation** from GitHub Actions.
 - Require branches to be up to date before merging (strict checks).
 - Preserve the repository's other protections; do not add a bot bypass.
-- Keep repository automatic merging disabled throughout the pilot.
+- Enable repository automatic merging only after the gate and required checks are verified.
 
 Both **Dependency validation** and **Dependency merge policy** must be required
 from GitHub Actions (integration 15368), with strict up-to-date branches, existing
@@ -133,13 +150,13 @@ The evidence bundle contains exact versions, relevant lockfile diff, bounded
 application source usage, exact release notes or versioned upstream source
 comparison, CI outcomes, and head/base/tested merge identities. Missing,
 truncated, oversized, or unsupported evidence produces human-review feedback
-without spending on a partial review. Runtime/tool/workflow-only updates are
-reviewed manually without an AI call. An AI result must match the JSON schema and
+without spending on a partial review. Package, runtime/tool and Action updates share the evidence/review path;
+unsupported or unrelated changes remain manual without a partial AI call. An AI result must match the JSON schema and
 exact identities; `PASS` requires no findings or uncertainties. It remains advisory.
 
 ## Usage, limits, and reruns
 
-The bundle limit is 64 KiB, at most five changed direct packages, 12 KiB per release
+The bundle limit is 64 KiB, at most five distinct declared dependency transitions, 12 KiB per release
 source, and an 8 KiB validated response. Review jobs have a ten-minute timeout and
 one active job per PR, cancelling obsolete work. Previously reported identities
 are not automatically reviewed again. Identity includes head, base, tested merge,
@@ -193,9 +210,11 @@ As of October 3, 2026:
 - Repeating an unchanged review identity skipped the model job, demonstrating the
   duplicate-review guard. Authorized human completion and rejection of stale
   approval were also demonstrated.
-- The owner approved stable helper activation. A naturally occurring eligible
-  native automatic merge, fresh resolved upgrades, and hosted mise lockfile
-  synchronization remain to be demonstrated.
+- Native automatic merging was demonstrated for an eligible tailwind-merge
+  declaration update after current CI, complete Sol PASS and the trusted gate.
+  The owner subsequently expanded eligibility to every dependency. Fresh resolved
+  upgrades and hosted mise lockfile synchronization remain to be demonstrated;
+  fixtures prove policy behavior, not integration regression detection.
 
 Keep dated workflow identities, human assessments, missed regressions/false
 approvals, unnecessary blocks, and token/cost data in the implementation's GitHub
@@ -226,7 +245,7 @@ link to the workflow summary. Legitimately inapplicable database checks remain
 handled by **Dependency validation**.
 
 Once required, the gate applies to all PRs to the default branch. Human completion
-uses an explicit revision-bound attestation, including for protected updates and
+uses an explicit revision-bound attestation, including for ineligible updates and
 AI failures. Review the diff and CI yourself, then select Actions → Evaluate
 dependency merge policy → Run workflow on **main**, set the PR number, check
 `approve`, and enter the full reviewed head/base SHAs. The CLI equivalent is:
@@ -250,7 +269,7 @@ never approval. Selecting `approve=false` simply reevaluates; it does not revoke
 a prior attestation.
 
 Automatic approval additionally requires both activation controls below, the
-actual Renovate bot identity, independently computed stable helper eligibility
+actual Renovate bot identity, independently computed dependency eligibility
 over the entire Git diff and lockfile, and a schema-valid complete `PASS` artifact
 from the current trusted **Dependency review** workflow. The latest matching
 review attempt must succeed; an older PASS cannot mask a later error or block.
@@ -273,13 +292,13 @@ requires an intentional rerun. No review database is introduced.
 3. Assess and record actual Renovate PRs and Sol outcomes/costs. Record the
    maintainer's explicit activation decision. Fixtures and a dashboard are not a
    completed pilot. Use a naturally occurring eligible update; do not invent one
-   or widen the package allowlist just to demonstrate merging.
+   or change eligibility just to manufacture a demonstration.
 4. In a reviewed configuration PR, set policy `mode: "automatic"` and
    `automaticMerging: true`, and add
-   `automerge: true` plus `automergeType: "pr"` **only** to the existing stable
-   helpers minor/patch rule in `renovate.json`. Keep global `automerge: false`,
-   `platformAutomerge: true`, and `rebaseWhen: "behind-base-branch"`. Keep security,
-   major and protected update rules manual. The gate still evaluates all
+   `automerge: true` plus `automergeType: "pr"` to all minor/patch updates and
+   Action pin/digest updates in `renovate.json`. Keep global `automerge: false`,
+   `platformAutomerge: true`, and `rebaseWhen: "behind-base-branch"`. Keep major,
+   prerelease and standalone lock maintenance updates manual. The gate evaluates all
    actual file/dependency changes, regardless of Renovate's classification.
 5. Verify both required statuses and strict rules, enable GitHub repository
    auto-merge, then set `DEPENDENCY_AUTOMERGE_ENABLED=true`. Obtain a fresh current
@@ -289,7 +308,7 @@ requires an intentional rerun. No review database is introduced.
 
 To stop automatic merging, disable repository auto-merge and cancel already queued
 PR auto-merges, set `DEPENDENCY_AUTOMERGE_ENABLED=false`, and dispatch evaluations
-for open PRs. Then revert the helper rule/policy activation in a reviewed PR, setting
+for open PRs. Then revert the automerge rules/policy activation in a reviewed PR, setting
 `mode: "supervised"` and `automaticMerging: false`.
 Changing a variable alone does not cancel a merge already queued by GitHub. Human
 completion and all deterministic required checks remain available. Disabling AI
@@ -306,7 +325,7 @@ mise exec -- task dependencies:audit
 
 Fixture tests mock GitHub and upstream APIs, use isolated Git/ZIP data, and never
 call OpenAI. They cover applicability, missing/failed/cancelled/skipped checks,
-Renovate identity/forks, grouped/protected/transitive changes, lock consistency,
+Renovate identity/forks, grouped updates and transitive evidence, lock consistency,
 schema/revision failures, unavailable setup, deduplication, data-only preparation,
 source-evidence completeness, usage, and stale publication. They cannot establish
 hosted App behavior, GitHub required-check plumbing, model quality, or live billing
