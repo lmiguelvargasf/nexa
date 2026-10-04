@@ -75,6 +75,8 @@ Weekly skill updates are prepared as one PR for manual review and merging. See
 
 ## Agent Pull Requests
 
-Briko uses the dedicated Brikosi GitHub App (`brikosi[bot]`) for coding-agent implementation PRs.
+Briko is the coding-agent publisher; **SI** stands for **Super Intelligence** in its
+GitHub App slug, `brikosi` (`brikosi[bot]`). It uses the dedicated Brikosi GitHub App
+for implementation PRs.
 It publishes reviewed commits for the maintainer to review and merge. See
 [protected local setup, publication, and credential lifecycle](docs/agent-publication.md).

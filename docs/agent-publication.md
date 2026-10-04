@@ -1,5 +1,9 @@
 # Briko agent pull requests
 
+The publisher is called **Briko**. In its GitHub App slug, `brikosi`, **SI** stands
+for **Super Intelligence**; the registered App name is **Brikosi** and its bot
+login is `brikosi[bot]`.
+
 Briko publishes coding-agent implementation branches and PRs through the owner's
 **Brikosi** GitHub App (`brikosi[bot]`). The maintainer
 reviews those PRs using their own GitHub account. App authorship is provenance;
