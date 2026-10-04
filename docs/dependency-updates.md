@@ -333,6 +333,16 @@ Completed unsuccessful CI and invalid or missing validation/review evidence prod
 a failing status with a link to the workflow summary. Legitimately inapplicable
 database checks remain handled by **CI validation**.
 
+Every evaluation writes its decision and reason to the job log and summary.
+Pending decisions produce a notice: the evaluator can finish successfully while
+the required commit status continues waiting for CI. Failed decisions produce an
+error annotation and fail the evaluator workflow after all open PRs have been
+evaluated. A green evaluator job therefore does not mean a pending PR is approved.
+Human-authored dependency PRs remain applicable in automatic mode and receive an
+explicit human-approval message instead of an automatic-review identity error.
+Failure summaries link to the manual workflow and include the exact head/base
+inputs; the maintainer must personally review those revisions before attesting.
+
 Human completion of an applicable dependency PR uses an explicit revision-bound
 attestation, including for ineligible updates and AI failures. Review the diff and
 CI yourself, then select Actions → Evaluate

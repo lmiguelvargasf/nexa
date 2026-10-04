@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   assertReport,
   authorizedHuman,
@@ -237,6 +238,7 @@ function fixture(
     approvals: [],
     permission: "admin",
     statuses: [],
+    messages: [],
     requests: [],
     headReads: 0,
     race: false,
@@ -245,6 +247,7 @@ function fixture(
 
 async function withFixture(t, automatic, callback, mutate, options) {
   const f = fixture(automatic, mutate, options);
+  t.mock.method(console, "log", (message) => f.messages.push(message));
   const cwd = process.cwd();
   const archive = (filename, value) => {
     writeFileSync(join(f.directory, filename), JSON.stringify(value));
@@ -260,14 +263,19 @@ async function withFixture(t, automatic, callback, mutate, options) {
     if (path === "") value = { default_branch: "main" };
     else if (path === "/branches/main")
       value = { commit: { sha: f.identity.baseSha } };
-    else if (path === "/pulls/7") {
+    else if (/^\/pulls\/\d+$/.test(path)) {
       f.headReads++;
+      const pr = (f.prs ?? [f.pr]).find(
+        (entry) => entry.number === Number(path.slice(7)),
+      );
+      assert.ok(pr, `Unexpected PR ${path}`);
       value =
         f.race && f.headReads > 1
-          ? { ...f.pr, head: { ...f.pr.head, sha: "e".repeat(40) } }
-          : f.pr;
+          ? { ...pr, head: { ...pr.head, sha: "e".repeat(40) } }
+          : pr;
     } else if (path.startsWith("/commits/") && f.commits[path.slice(9)])
       value = f.commits[path.slice(9)];
+    else if (path === "/pulls") value = f.prs ?? [f.pr];
     else if (path === "/actions/workflows/ci.yml/runs")
       value = { workflow_runs: f.ciRuns };
     else if (path === "/actions/workflows/dependency-merge-policy.yml/runs")
@@ -337,7 +345,7 @@ async function withFixture(t, automatic, callback, mutate, options) {
   const run = async () => {
     f.headReads = 0;
     writeFileSync(f.env.GITHUB_EVENT_PATH, JSON.stringify(f.event));
-    await gate(join(f.directory, "approval"), f.env);
+    f.decisions = await gate(join(f.directory, "approval"), f.env);
     return f.statuses.at(-1);
   };
   try {
@@ -346,6 +354,64 @@ async function withFixture(t, automatic, callback, mutate, options) {
     process.chdir(cwd);
     rmSync(f.directory, { recursive: true, force: true });
   }
+}
+
+function runCLI(f) {
+  const preload = join(f.directory, "mock-github.mjs");
+  const statuses = join(f.directory, "cli-statuses.json");
+  writeFileSync(
+    join(f.directory, "cli-data.json"),
+    JSON.stringify({
+      repository,
+      prs: f.prs ?? [f.pr],
+      base: f.identity.baseSha,
+      ciRuns: f.ciRuns,
+    }),
+  );
+  writeFileSync(
+    preload,
+    `import { readFileSync, writeFileSync } from "node:fs";
+const data = JSON.parse(readFileSync("cli-data.json", "utf8"));
+const statuses = [];
+globalThis.fetch = async (url, options = {}) => {
+  const path = new URL(url).pathname.replace("/repos/" + data.repository, "");
+  let value;
+  if (path === "") value = {default_branch: "main"};
+  else if (path === "/branches/main") value = {commit: {sha: data.base}};
+  else if (path === "/pulls") value = data.prs;
+  else if (/^\\/pulls\\/\\d+$/.test(path))
+    value = data.prs.find(pr => pr.number === Number(path.slice(7)));
+  else if (path === "/actions/workflows/ci.yml/runs")
+    value = {workflow_runs: data.ciRuns};
+  else if (path.startsWith("/statuses/")) {
+    statuses.push({sha: path.slice(10), ...JSON.parse(options.body)});
+    writeFileSync("cli-statuses.json", JSON.stringify(statuses));
+    value = {};
+  } else throw new Error("Unexpected network request " + url);
+  return new Response(JSON.stringify(value));
+};
+`,
+  );
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      preload,
+      fileURLToPath(new URL("./merge-policy.mjs", import.meta.url)),
+      join(f.directory, "cli-approval"),
+    ],
+    {
+      cwd: f.directory,
+      env: { ...process.env, ...f.env, GH_TOKEN: "fixture-token" },
+      encoding: "utf8",
+      timeout: 10_000,
+    },
+  );
+  assert.equal(result.error, undefined);
+  return {
+    ...result,
+    statuses: JSON.parse(readFileSync(statuses, "utf8")),
+  };
 }
 
 test("automatic mode requires independently verified dependency changes, current CI and trusted PASS", async (t) =>
@@ -883,21 +949,136 @@ test("unreadable diff evidence fails without attempting dependency review", asyn
   ));
 
 test("human updates remain applicable for every supported manager", async (t) => {
-  for (const manager of ["bun", "mise", "github-actions"])
+  for (const automatic of [false, true])
+    for (const manager of ["bun", "mise", "github-actions"])
+      await withFixture(
+        t,
+        automatic,
+        async (f, run) => {
+          f.pr.user = { type: "User", login: "owner" };
+          f.pr.head.ref = "feature/dependency";
+          const result = await run();
+          assert.equal(result.state, "failure");
+          assert.match(result.description, /explicit human review approval/);
+          assert.ok(
+            !f.requests.some(({ path }) =>
+              path.includes("dependency-review.yml"),
+            ),
+          );
+          f.event.inputs.approve = "true";
+          assert.equal((await run()).state, "success");
+        },
+        () => {},
+        { manager },
+      );
+});
+
+test("policy decisions are visible in logs, annotations and actionable summaries", async (t) =>
+  withFixture(t, true, async (f, run) => {
+    f.pr.user = { type: "User", login: "owner" };
+    const result = await run();
+    assert.equal(result.state, "failure");
+    assert.deepEqual(f.decisions, [
+      {
+        prNumber: f.pr.number,
+        state: "failure",
+        reason:
+          "Requires explicit human review approval; automatic review unavailable: Only open, same-repository Renovate PRs can enter the reviewer.",
+      },
+    ]);
+    assert.match(f.messages[0], /PR #7: failure — Requires explicit human/);
+    assert.match(f.messages[1], /^::error::PR #7: failure/);
+    const summary = readFileSync(f.env.GITHUB_STEP_SUMMARY, "utf8");
+    for (const text of [
+      "personally reviewing this exact revision",
+      "approve=true",
+      `expected_head=${f.pr.head.sha}`,
+      `expected_base=${f.pr.base.sha}`,
+      `https://github.com/${repository}/actions/workflows/dependency-merge-policy.yml`,
+    ])
+      assert.ok(summary.includes(text), text);
+
+    f.messages.length = 0;
+    f.ciRuns[0].status = "in_progress";
+    f.ciRuns[0].conclusion = null;
+    assert.equal((await run()).state, "pending");
+    assert.equal(f.decisions[0].state, "pending");
+    assert.match(f.messages[1], /^::notice::PR #7: pending/);
+    assert.ok(!f.messages.some((message) => message.startsWith("::error::")));
+    assert.match(
+      readFileSync(f.env.GITHUB_STEP_SUMMARY, "utf8"),
+      /required Dependency merge policy status remains pending/,
+    );
+
+    f.messages.length = 0;
+    f.ciRuns[0].status = "completed";
+    f.ciRuns[0].conclusion = "success";
+    f.event.inputs.approve = "true";
+    assert.equal((await run()).state, "success");
+    assert.equal(f.decisions[0].state, "success");
+    assert.equal(f.messages.length, 1);
+    assert.match(f.messages[0], /PR #7: success — Human approval/);
+  }));
+
+test("a failed decision does not stop publication for the other open PRs", async (t) =>
+  withFixture(
+    t,
+    true,
+    async (f, run) => {
+      f.env.GITHUB_EVENT_NAME = "push";
+      f.prs = [
+        { ...f.pr, draft: true },
+        { ...f.pr, number: 8 },
+      ];
+      assert.equal((await run()).state, "success");
+      assert.deepEqual(
+        f.decisions.map(({ prNumber, state }) => ({ prNumber, state })),
+        [
+          { prNumber: 7, state: "failure" },
+          { prNumber: 8, state: "success" },
+        ],
+      );
+      assert.match(f.messages[1], /^::error::PR #7: failure/);
+      assert.match(f.messages[2], /PR #8: success — Not applicable/);
+      const cli = runCLI(f);
+      assert.equal(cli.status, 1, cli.stderr);
+      assert.match(cli.stdout, /::error::PR #7: failure/);
+      assert.match(cli.stdout, /PR #8: success — Not applicable/);
+      assert.deepEqual(
+        cli.statuses.map(({ state }) => state),
+        [
+          "pending",
+          "pending",
+          "failure",
+          "failure",
+          "pending",
+          "pending",
+          "success",
+          "success",
+        ],
+      );
+    },
+    () => {},
+    { manager: "none" },
+  ));
+
+test("the actual CLI exits successfully for pending and non-applicable decisions", async (t) => {
+  for (const state of ["pending", "success"])
     await withFixture(
       t,
-      false,
-      async (f, run) => {
-        f.pr.user = { type: "User", login: "owner" };
-        f.pr.head.ref = "feature/dependency";
-        const result = await run();
-        assert.equal(result.state, "failure");
-        assert.match(result.description, /explicit human review approval/);
-        f.event.inputs.approve = "true";
-        assert.equal((await run()).state, "success");
+      true,
+      async (f) => {
+        f.ciRuns = [];
+        writeFileSync(f.env.GITHUB_EVENT_PATH, JSON.stringify(f.event));
+        const cli = runCLI(f);
+        assert.equal(cli.status, 0, cli.stderr);
+        assert.match(cli.stdout, new RegExp(`PR #7: ${state}`));
+        assert.equal(cli.statuses.at(-1).state, state);
+        assert.doesNotMatch(cli.stdout, /::error::/);
+        if (state === "pending") assert.match(cli.stdout, /::notice::/);
       },
       () => {},
-      { manager },
+      { manager: state === "pending" ? "bun" : "none" },
     );
 });
 
