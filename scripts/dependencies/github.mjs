@@ -139,7 +139,9 @@ export async function releaseEvidence(
   if (!match || metadata.name !== change.name || metadata.version !== version)
     throw new Error("Missing versioned upstream source");
   const client = clientForRepo(match[1]);
-  for (const tag of [`v${version}`, version]) {
+  // Some monorepos publish exact package-prefixed tags (for example,
+  // tailwind-merge@3.7.0). Keep lookup bounded to these three exact names.
+  for (const tag of [`v${version}`, version, `${change.name}@${version}`]) {
     try {
       const release = await client.api(
         `releases/tags/${encodeURIComponent(tag)}`,

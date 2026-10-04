@@ -88,6 +88,77 @@ test("exact versioned source comparison is a fallback when release notes are abs
   assert.equal(calls.at(-1), "compare/v2.1.0...v2.1.1");
 });
 
+test("exact package-prefixed release tags support monorepos and scoped package names", async (t) => {
+  for (const name of ["tailwind-merge", "@scope/helper"]) {
+    t.mock.method(
+      globalThis,
+      "fetch",
+      async () =>
+        new Response(
+          JSON.stringify({
+            name,
+            version: "3.7.0",
+            repository: "https://github.com/owner/packages.git",
+          }),
+        ),
+    );
+    const calls = [];
+    const result = await releaseEvidence(
+      { name, before: "3.6.0", after: "3.7.0" },
+      12000,
+      () => ({
+        api: async (path) => {
+          calls.push(path);
+          if (path !== `releases/tags/${encodeURIComponent(`${name}@3.7.0`)}`)
+            throw new Error("HTTP 404");
+          return {
+            body: "Exact package release notes",
+            html_url: `https://github.com/owner/packages/releases/tag/${encodeURIComponent(`${name}@3.7.0`)}`,
+          };
+        },
+      }),
+    );
+    assert.equal(result.tag, `${name}@3.7.0`);
+    assert.equal(result.notes, "Exact package release notes");
+    assert.equal(calls.length, 3);
+  }
+});
+
+test("package-prefixed releases retain completeness, size and prerelease restrictions", async (t) => {
+  t.mock.method(
+    globalThis,
+    "fetch",
+    async () =>
+      new Response(
+        JSON.stringify({
+          name: "tailwind-merge",
+          version: "3.7.0",
+          repository: "https://github.com/owner/packages",
+        }),
+      ),
+  );
+  const change = { name: "tailwind-merge", before: "3.6.0", after: "3.7.0" };
+  const client = (release) => () => ({
+    api: async (path) => {
+      if (path === "releases/tags/tailwind-merge%403.7.0") return release;
+      throw new Error("HTTP 404");
+    },
+  });
+  await assert.rejects(
+    releaseEvidence(change, 10, client({ body: "x".repeat(11) })),
+    /context limit/,
+  );
+  for (const release of [
+    { body: "" },
+    { body: "notes", draft: true },
+    { body: "notes", prerelease: true },
+  ])
+    await assert.rejects(
+      releaseEvidence(change, 12000, client(release)),
+      /No release notes/,
+    );
+});
+
 test("oversized release notes and missing source patches cannot silently count as complete", async (t) => {
   t.mock.method(
     globalThis,
