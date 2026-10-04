@@ -199,9 +199,6 @@ For just `github-issues`, the explicit manual refresh procedure in
 [`docs/github-issues.md`](github-issues.md) continues to apply, including prior
 review, license synchronization, and byte/hash checks before and after hooks.
 
-The implementation's [validation record](validation/skill-updates.md) separates
-isolated tests from live source and GitHub observations.
-
 References: [GitHub scheduling](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule),
 [token-trigger behavior](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow),
 and the [Skills CLI source](https://github.com/vercel-labs/skills).
