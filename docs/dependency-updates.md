@@ -1,12 +1,14 @@
 # Dependency updates
 
-Renovate prepares updates; CI validates them; a bounded Sol review can provide
-advisory feedback. **Every merge is manual during this supervised delivery.**
-`renovate.json` has `automerge: false`, the policy has `automaticMerging: false`,
-and `DEPENDENCY_AUTOMERGE_ENABLED` is unset. Changing a label or receiving AI
-`PASS` cannot enable merging. The trusted merge gate is implemented separately
-from the secret-bearing reviewer; requiring it and activating merging are rollout
-steps, tracked in [#29](https://github.com/lmiguelvargasf/nexa/issues/29).
+Renovate prepares updates; CI validates them; a bounded Sol review assesses
+compatibility. Automatic merging is enabled only for stable patch updates to
+`clsx` and `tailwind-merge`, following the owner's October 3 activation decision.
+The trusted merge gate independently requires eligibility, current applicable CI,
+and a complete current-policy Sol `PASS`. Other updates require human approval.
+Global Renovate `automerge` remains false; only the helper patch rule enables it.
+GitHub repository auto-merge and `DEPENDENCY_AUTOMERGE_ENABLED=true` must also be
+set in the destination repository. A copied configuration alone does not activate
+merging. A real eligible native automatic merge has not yet been demonstrated.
 
 ## Schedule and update sources
 
@@ -18,10 +20,10 @@ detected vulnerability PRs may bypass that cap and the weekly schedule.
 
 The configuration supports Bun manifests/lockfiles, mise pins/lockfiles, and
 GitHub Actions, including digest pinning. Related React/Next.js, AI SDK, email,
-Node, and Bun declarations are grouped. Major upgrades stay separate; all updates
-are manually reviewed. `clsx` and `tailwind-merge` stable patches are the proposed
-future helper allowlist. They are a candidate classification, not permission to
-merge. Other file changes, mixed/protected updates, 0.x/prerelease/minor/major
+Node, and Bun declarations are grouped. Major upgrades stay separate. Only
+`clsx` and `tailwind-merge` stable patches can qualify for automatic merging;
+their classification alone is not approval. Other file changes, mixed/protected
+updates, 0.x/prerelease/minor/major
 updates, changed scripts/trust/overrides, inconsistent lockfiles, and transitive
 changes require a human.
 
@@ -73,9 +75,12 @@ repository's default branch in GitHub Settings → Rules → Rulesets:
 - Preserve the repository's other protections; do not add a bot bypass.
 - Keep repository automatic merging disabled throughout the pilot.
 
-The supplied repository initially had a disabled ruleset and no active branch
-protection. Workflow YAML does not enable these settings by itself. Verify them
-in the destination repository. For `lmiguelvargasf/nexa`, ruleset [17001152](https://github.com/lmiguelvargasf/nexa/rules/17001152) was activated on October 3 after [PR #25 CI](https://github.com/lmiguelvargasf/nexa/actions/runs/37169889584) passed. It preserves the previous PR/deletion/force-push rules, requires **Dependency validation** specifically from GitHub Actions (integration 15368), enforces an up-to-date base, and has no bypass actors. Repository automatic merging remains disabled. These settings are repository-specific and do not transfer with the template.
+Both **Dependency validation** and **Dependency merge policy** must be required
+from GitHub Actions (integration 15368), with strict up-to-date branches, existing
+PR/deletion/force-push protections, and no bypass actors. These settings are
+configured in GitHub, not enabled by workflow YAML. Verify them in each destination
+repository. The human completion path has been demonstrated with both required
+statuses passing; its revision-bound approval does not waive CI.
 
 The advisory **Dependency review** workflow must
 not be a required check: missing funding or AI `NEEDS_HUMAN` must not prevent a
@@ -157,23 +162,34 @@ later intentional rerun, not a paid retry loop.
 Disable advisory review immediately by setting `DEPENDENCY_AI_REVIEW_ENABLED=false`
 and cancelling active review jobs. Remove/rotate the API secret if necessary.
 Disable update creation in the Renovate App or set `enabled: false` in Renovate
-configuration. None of these actions changes the manual merge requirement.
+configuration. Disabling advisory review is not a merge kill switch; use the
+automatic-merging shutdown procedure below.
 
-## Pilot record and later activation
+## Pilot findings and remaining validation
 
-Keep issue #16 open for the activation stage. Record each real PR here or in its
-issue discussion: PR and review identities, human assessment, useful findings,
-missed regressions/false approvals, unnecessary blocks, token/cost data, and time
-saved. A fixed pilot count is an operational milestone, not a safety certification.
+As of October 3, 2026:
 
-| Evidence | Current status |
-| --- | --- |
-| Local configuration validation/extraction and isolated failure-path fixtures | Recorded in the implementation PR |
-| Hosted Renovate installation and a reproducible Bun/mise update | Nexa-only installation 167693154 verified; dashboard #28 exists; reproducible update PR pending |
-| Funded project, API secret and enforced spending cap | Secret, review-enable variable, $5 prepaid balance, auto-reload off, and enforced $5 project cap verified October 3; no paid pilot review run |
-| Active required-check rules in the destination repository | Verified for Nexa ruleset 17001152; reconfigure for copied repositories |
-| Real PR outcomes and measured Sol costs | Pending pilot |
-| Maintainer's automatic-merge activation decision | Pending; automatic merging disabled |
+- The hosted Renovate App, API secret, review-enable variable, $5 prepaid balance,
+  auto-reload disabled, and enforced $5 project spend cap were verified. Copied
+  repositories must perform their own setup.
+- Two real Renovate updates passed frozen CI and complete Sol review with no
+  findings or uncertainties. Both changed only declared ranges; installed
+  versions and transitive entries were already at the targets. They do not prove
+  fresh lockfile resolution or regression detection for changed installed code.
+- Four paid reviews totaled $0.118648 in estimated token cost. The first pair
+  unnecessarily questioned the tested merge relationship; supplying its validated
+  parents, exact lock entries and adjacent test source resolved that evidence gap.
+- Repeating an unchanged review identity skipped the model job, demonstrating the
+  duplicate-review guard. Authorized human completion and rejection of stale
+  approval were also demonstrated.
+- The owner approved stable helper patch activation. A naturally occurring eligible
+  native automatic merge, fresh resolved upgrades, and hosted mise lockfile
+  synchronization remain to be demonstrated.
+
+Keep dated workflow identities, human assessments, missed regressions/false
+approvals, unnecessary blocks, and token/cost data in the implementation's GitHub
+record. Operational instructions must remain understandable without those links.
+A fixed pilot count is an operational milestone, not a safety certification.
 
 ### Trusted merge policy and human completion
 
@@ -243,11 +259,12 @@ requires an intentional rerun. No review database is introduced.
    strict up-to-date branches, PR requirements, and no bypass actors. Do this only
    after the status has been produced successfully; requiring an unpublished
    workflow would deadlock its own implementation PR.
-3. Assess and record actual Renovate PRs and Sol outcomes/costs in #16. Record the
+3. Assess and record actual Renovate PRs and Sol outcomes/costs. Record the
    maintainer's explicit activation decision. Fixtures and a dashboard are not a
    completed pilot. No eligible helper patch currently appears in Nexa's dashboard;
    do not invent an update or widen eligibility just to demonstrate merging.
-4. In a reviewed configuration PR, set policy `automaticMerging: true` and add
+4. In a reviewed configuration PR, set policy `mode: "automatic"` and
+   `automaticMerging: true`, and add
    `automerge: true` plus `automergeType: "pr"` **only** to the existing stable
    helpers patch rule in `renovate.json`. Keep global `automerge: false`,
    `platformAutomerge: true`, and `rebaseWhen: "behind-base-branch"`. Keep security,
@@ -256,12 +273,13 @@ requires an intentional rerun. No review database is introduced.
 5. Verify both required statuses and strict rules, enable GitHub repository
    auto-merge, then set `DEPENDENCY_AUTOMERGE_ENABLED=true`. Obtain a fresh current
    Sol review after the configuration change; old-policy results cannot qualify.
-   Record an actual eligible native automatic merge in #29 and #16 before closing
-   activation work. The reviewer retains no merge credential.
+   Record an actual eligible native automatic merge before declaring end-to-end
+   activation validation complete. The reviewer retains no merge credential.
 
 To stop automatic merging, disable repository auto-merge and cancel already queued
 PR auto-merges, set `DEPENDENCY_AUTOMERGE_ENABLED=false`, and dispatch evaluations
-for open PRs. Then revert the helper rule/policy activation in a reviewed PR.
+for open PRs. Then revert the helper rule/policy activation in a reviewed PR, setting
+`mode: "supervised"` and `automaticMerging: false`.
 Changing a variable alone does not cancel a merge already queued by GitHub. Human
 completion and all deterministic required checks remain available. Disabling AI
 review does not count as approval.

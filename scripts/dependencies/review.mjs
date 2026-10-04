@@ -158,7 +158,7 @@ export async function prepare(directory, env = process.env) {
   }
   const policy = readJson(`${ROOT}/policy.json`);
   if (
-    policy.mode !== "supervised" ||
+    policy.mode !== (policy.automaticMerging ? "automatic" : "supervised") ||
     policy.model !== "gpt-6.1-sol" ||
     policy.effort !== "medium" ||
     policy.serviceTier !== "default"

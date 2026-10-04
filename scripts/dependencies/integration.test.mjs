@@ -388,5 +388,24 @@ test("fresh advisory feedback is posted to the resolved copied repository", asyn
     await publish(out, f.env);
     const post = calls.find((call) => call.method === "POST");
     assert.equal(post.path, "/repos/owner/copied-template/issues/7/comments");
-    assert.match(JSON.parse(post.body).body, /automatic merging is disabled/);
+    assert.match(JSON.parse(post.body).body, /trusted merge policy/);
+  }));
+
+test("preparation supports both policy modes and rejects inconsistent activation", async (t) =>
+  withFixture(t, async (f) => {
+    const path = join(f.directory, ".github/dependencies/policy.json");
+    const policy = JSON.parse(readFileSync(path));
+    const out = join(f.directory, "prepared");
+    for (const automatic of [false, true]) {
+      policy.mode = automatic ? "automatic" : "supervised";
+      policy.automaticMerging = automatic;
+      writeFileSync(path, JSON.stringify(policy));
+      await prepare(out, f.env);
+      const report = JSON.parse(readFileSync(join(out, "report.json")));
+      assert.equal(report.status, "PENDING");
+      assert.equal(report.policy.automaticMerging, automatic);
+      policy.mode = automatic ? "supervised" : "automatic";
+      writeFileSync(path, JSON.stringify(policy));
+      await assert.rejects(prepare(out, f.env), /Unexpected review policy/);
+    }
   }));
