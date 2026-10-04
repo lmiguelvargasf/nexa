@@ -4,7 +4,7 @@
 [![React](https://img.shields.io/badge/React-19.2-149eca?logo=react&logoColor=white)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Node.js](https://img.shields.io/badge/Node.js-24.16-5fa04e?logo=nodedotjs&logoColor=white)](https://nodejs.org)
-[![Bun](https://img.shields.io/badge/Bun-1.3-000000?logo=bun&logoColor=white)](https://bun.sh)
+[![Bun](https://img.shields.io/badge/Bun-1.4-000000?logo=bun&logoColor=white)](https://bun.sh)
 [![mise](https://img.shields.io/badge/mise-pinned_tools-1f2937)](https://mise.jdx.dev)
 [![Task](https://img.shields.io/badge/Task-runner-2563eb)](https://taskfile.dev)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-38bdf8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
