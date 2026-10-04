@@ -150,8 +150,28 @@ export function lockedChanges(changes, oldLock, newLock) {
   });
 }
 
-const version = (value) =>
-  /^(\^|~)?([1-9]\d*)\.(\d+)\.(\d+)$/.exec(value ?? "");
+// Deliberately support only simple stable exact/caret/tilde declarations.
+const version = (value) => {
+  if (typeof value !== "string") return null;
+  const match = /^(\^|~)?([1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(value);
+  if (!match || match[0] !== value) return null;
+  const parts = match.slice(2).map(Number);
+  if (!parts.every(Number.isSafeInteger)) return null;
+  return { operator: match[1] ?? "", parts };
+};
+const compareVersions = (a, b) =>
+  a.parts
+    .map((part, index) => part - b.parts[index])
+    .find((diff) => diff !== 0) ?? 0;
+const satisfies = (resolved, declaration) => {
+  if (resolved.parts[0] !== declaration.parts[0]) return false;
+  const comparison = compareVersions(resolved, declaration);
+  if (comparison < 0) return false;
+  if (declaration.operator === "^") return true;
+  if (declaration.operator === "~")
+    return resolved.parts[1] === declaration.parts[1];
+  return comparison === 0;
+};
 
 export function helperEligibility(
   { paths, before, after, oldLock, newLock },
@@ -188,13 +208,12 @@ export function helperEligibility(
       !allowlist.includes(change.name) ||
       !old ||
       !next ||
-      old[1] !== next[1] ||
-      old[2] !== next[2] ||
-      old[3] !== next[3] ||
-      Number(next[4]) <= Number(old[4])
+      old.operator !== next.operator ||
+      old.parts[0] !== next.parts[0] ||
+      compareVersions(next, old) <= 0
     ) {
       reasons.push(
-        `${change.name}: requires human review (only stable helper patches qualify).`,
+        `${change.name}: requires human review (only stable helper minor/patch updates qualify).`,
       );
     }
   }
@@ -220,27 +239,49 @@ export function helperEligibility(
   if (!equal(stripLock(oldLock), stripLock(newLock)))
     reasons.push("Unrelated or transitive lockfile metadata changed.");
   for (const change of changes) {
+    const resolved = [];
     for (const [lock, declaration] of [
       [oldLock, change.before],
       [newLock, change.after],
     ]) {
       const entry = lock?.packages?.[change.name];
       const parsed = version(declaration);
-      const expected = parsed
-        ? `${change.name}@${parsed.slice(2).join(".")}`
-        : null;
+      const prefix = `${change.name}@`;
       if (
         !Array.isArray(entry) ||
         entry.length !== 4 ||
-        entry[0] !== expected ||
+        typeof entry[0] !== "string" ||
+        !entry[0].startsWith(prefix) ||
         entry[1] !== "" ||
         !equal(entry[2], {}) ||
+        typeof entry[3] !== "string" ||
         !/^sha512-[A-Za-z0-9+/=]+$/.test(entry[3])
       ) {
         reasons.push(
           `${change.name}: unsupported source, integrity, or dependency metadata.`,
         );
+        continue;
       }
+      const locked = version(entry[0].slice(prefix.length));
+      if (!locked || locked.operator || !parsed || !satisfies(locked, parsed)) {
+        reasons.push(
+          `${change.name}: locked version does not satisfy its supported stable declaration.`,
+        );
+        continue;
+      }
+      resolved.push(locked);
+    }
+    if (resolved.length === 2) {
+      const comparison = compareVersions(resolved[1], resolved[0]);
+      if (resolved[0].parts[0] !== resolved[1].parts[0] || comparison < 0)
+        reasons.push(`${change.name}: resolved major change or downgrade.`);
+      if (
+        comparison === 0 &&
+        !equal(oldLock.packages[change.name], newLock.packages[change.name])
+      )
+        reasons.push(
+          `${change.name}: same-version locked package data changed.`,
+        );
     }
   }
   return { candidate: reasons.length === 0, reasons, changes };

@@ -25,7 +25,8 @@
   "packageRules": [
     {
       "matchDepNames": ["clsx", "tailwind-merge"],
-      "matchUpdateTypes": ["patch"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "matchCurrentVersion": "!/^0/",
       "groupName": "stable helpers",
       "automerge": true,
       "automergeType": "pr"

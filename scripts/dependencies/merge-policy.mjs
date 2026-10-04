@@ -334,7 +334,7 @@ export async function evaluate(
       "report.json",
     );
     assertReport(report, entry, identity, policy, key, JSON.parse(schemaText));
-    return `Eligible helper patch; current CI ${ci.id} and Sol PASS ${entry.id}`;
+    return `Eligible helper minor/patch update; current CI ${ci.id} and Sol PASS ${entry.id}`;
   }
   throw new Error(
     reviewRun
