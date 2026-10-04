@@ -278,7 +278,13 @@ export async function evaluate(
     throw new Error(
       "Supervised mode: explicit human review approval is required",
     );
-  assertIdentity(identity, pr, commit, repository);
+  try {
+    assertIdentity(identity, pr, commit, repository);
+  } catch (error) {
+    throw new Error(
+      `Requires explicit human review approval; automatic review unavailable: ${error.message}`,
+    );
+  }
   git(
     "fetch",
     "--quiet",
@@ -372,6 +378,7 @@ export async function gate(directory, env = process.env) {
     prs = await client.pages(
       `pulls?state=open&base=${encodeURIComponent(branch)}`,
     );
+  const decisions = [];
   for (const pr of prs) {
     if (pr.state !== "open" || pr.base.ref !== branch) continue;
     if (!SHA.test(pr.head.sha)) throw new Error("Invalid PR head");
@@ -434,11 +441,25 @@ export async function gate(directory, env = process.env) {
       reason = error.message;
     }
     await status(state, reason);
+    const message = `PR #${pr.number}: ${state} — ${safe(reason)}`;
+    console.log(message);
+    if (state !== "success")
+      console.log(
+        `::${state === "failure" ? "error" : "notice"}::${message.replaceAll("%", "%25")}`,
+      );
+    const approvalInstructions =
+      state === "failure"
+        ? `After resolving any CI/evidence failures and personally reviewing this exact revision, a write-authorized human can approve through [Evaluate dependency merge policy](https://github.com/${repository}/actions/workflows/dependency-merge-policy.yml) on \`${branch}\`, with \`pr_number=${pr.number}\`, \`approve=true\`, \`expected_head=${pr.head.sha}\`, and \`expected_base=${pr.base.sha}\`. Human approval does not waive CI or repository protection.\n\n`
+        : state === "pending"
+          ? "The evaluator finished; the required Dependency merge policy status remains pending and blocks merging until current CI completes. CI completion triggers a fresh evaluation.\n\n"
+          : "";
     appendFileSync(
       env.GITHUB_STEP_SUMMARY,
-      `PR #${pr.number}: **${state}** — ${safe(reason)}\n\n`,
+      `PR #${pr.number}: **${state}** — ${safe(reason)}\n\n${approvalInstructions}`,
     );
+    decisions.push({ prNumber: pr.number, state, reason });
   }
+  return decisions;
 }
 
 if (
@@ -446,7 +467,11 @@ if (
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
   try {
-    await gate(process.argv[2]);
+    const decisions = await gate(process.argv[2]);
+    // Publish every PR decision before failing the evaluator workflow. Pending
+    // is a normal wait; only successful statuses authorize the required gate.
+    if (decisions.some(({ state }) => state === "failure"))
+      process.exitCode = 1;
   } catch (error) {
     console.error(safe(error.message));
     process.exitCode = 1;
