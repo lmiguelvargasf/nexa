@@ -16,7 +16,7 @@ concurrency:
 jobs:
   update:
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
       contents: write
@@ -43,7 +43,7 @@ jobs:
         run: mise exec -- bun scripts/skills/update.mjs --publish
       - name: Preserve the report, including failed or pending updates
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: skill-update-report
           path: ${{ runner.temp }}/skill-update-report

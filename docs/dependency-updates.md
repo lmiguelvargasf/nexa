@@ -97,6 +97,21 @@ expedite a security update.
 
 ## CI and required checks
 
+Hosted Ubuntu jobs use `ubuntu-24.04`. Adopting Ubuntu 26.04 requires a separate,
+tested update; this label still receives GitHub's weekly runner image and package
+updates, so it does not freeze the image contents.
+
+Artifact actions use the Node.js 24 releases
+[`upload-artifact@v7`](https://github.com/actions/upload-artifact/releases/tag/v7.0.0)
+and [`download-artifact@v8`](https://github.com/actions/download-artifact/releases/tag/v8.0.0).
+Uploads retain the default ZIP archive format (`archive: true`), including single
+JSON files read across runs by the dependency review and merge policy. Downloads
+retain extraction by artifact name into the configured path; digest mismatches
+now fail by default. Artifact names, retention and provenance checks are unchanged.
+[`cache@v6`](https://github.com/actions/cache/releases/tag/v6.0.0) also declares
+Node.js 24; cache paths, keys and restore keys stay unchanged. These major upgrades
+require manual review under the dependency policy above.
+
 The always-present **Dependency validation** job aggregates scope, application
 validation, and database validation. Required checks include frozen installation,
 format/lint, types, unit/automation tests, production build, all three browser smoke

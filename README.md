@@ -3,7 +3,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-16.3-black?logo=nextdotjs)](https://nextjs.org/docs)
 [![React](https://img.shields.io/badge/React-19.2-149eca?logo=react&logoColor=white)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Node.js](https://img.shields.io/badge/Node.js-24.16-5fa04e?logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/Node.js-24.21-5fa04e?logo=nodedotjs&logoColor=white)](https://nodejs.org)
 [![Bun](https://img.shields.io/badge/Bun-1.4-000000?logo=bun&logoColor=white)](https://bun.sh)
 [![mise](https://img.shields.io/badge/mise-pinned_tools-1f2937)](https://mise.jdx.dev)
 [![Task](https://img.shields.io/badge/Task-runner-2563eb)](https://taskfile.dev)
@@ -31,7 +31,7 @@ Nexa is a Next.js 16 App Router app for a modern full-stack product workflow. It
 
 - macOS or GNU/Linux compatible with the pinned toolchain. The Linux lock uses
   Node's official glibc artifacts; Alpine/musl environments need a separate tool
-  configuration. See [Node's supported platforms](https://github.com/nodejs/node/blob/v24.16.0/BUILDING.md#platform-list).
+  configuration. See [Node's supported platforms](https://github.com/nodejs/node/blob/v24.21.0/BUILDING.md#platform-list).
 - [Docker](https://docs.docker.com/get-started/get-docker/) for the local Supabase database.
 
 ## Initialize Locally
