@@ -11,10 +11,16 @@ export function repositoryName(value) {
 
 export async function request(
   url,
-  { token, body, method = "GET", maxBytes = 4_000_000 } = {},
+  {
+    token,
+    body,
+    method = "GET",
+    maxBytes = 4_000_000,
+    accept = "application/vnd.github+json",
+  } = {},
 ) {
   const headers = {
-    Accept: "application/vnd.github+json",
+    Accept: accept,
     "User-Agent": "nexa-dependency-review",
     "X-GitHub-Api-Version": "2022-11-28",
   };
@@ -126,7 +132,12 @@ export async function releaseEvidence(
     throw new Error("Unsupported package declaration");
   const metadataUrl = `https://registry.npmjs.org/${encodeURIComponent(change.name)}/${encodeURIComponent(version)}`;
   const metadata = JSON.parse(
-    (await request(metadataUrl, { maxBytes: 300_000 })).toString(),
+    (
+      await request(metadataUrl, {
+        maxBytes: 300_000,
+        accept: "application/json",
+      })
+    ).toString(),
   );
   const repositoryUrl =
     typeof metadata.repository === "string"

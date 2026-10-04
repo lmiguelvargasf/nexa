@@ -113,8 +113,23 @@ export async function currentCI(client, pr, repository, token) {
   const identity = await validationIdentity(client, run.id, token, repository);
   const commit = await client.api(`commits/${identity.testedSha}`);
   assertIdentity(identity, pr, commit, repository, false);
-  if (identity.testedSha !== pr.merge_commit_sha)
-    throw new Error("CI did not test the current GitHub merge revision");
+  if (identity.testedSha !== pr.merge_commit_sha) {
+    // GitHub can regenerate a test merge with a new timestamp. Reuse CI only
+    // when both exact parents and the complete Git tree still match.
+    if (!SHA.test(pr.merge_commit_sha ?? ""))
+      throw new Error("Missing current GitHub merge revision");
+    const current = await client.api(`commits/${pr.merge_commit_sha}`);
+    assertIdentity(
+      { ...identity, testedSha: pr.merge_commit_sha },
+      pr,
+      current,
+      repository,
+      false,
+    );
+    const tree = commit.commit?.tree?.sha;
+    if (!SHA.test(tree ?? "") || current.commit?.tree?.sha !== tree)
+      throw new Error("Current merge content differs from the CI-tested tree");
+  }
   const { jobs } = await client.api(`actions/runs/${run.id}/jobs?per_page=100`);
   for (const name of [
     "Validation scope",
@@ -361,7 +376,7 @@ export async function gate(directory, env = process.env) {
     if (pr.state !== "open" || pr.base.ref !== branch) continue;
     if (!SHA.test(pr.head.sha)) throw new Error("Invalid PR head");
     // Publish on both revisions so GitHub's head/test-merge precedence cannot
-    // select a missing context. All successful evidence must match this merge.
+    // select a missing context. CI must match this merge's parents and tree.
     const revisions = [
       ...new Set(
         [pr.head.sha, pr.merge_commit_sha].filter((sha) => SHA.test(sha ?? "")),
