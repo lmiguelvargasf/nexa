@@ -3,6 +3,11 @@ name: Database
 on:
   workflow_call:
   workflow_dispatch:
+    inputs:
+      smoke:
+        description: Verify isolated migration, seed, lint, and pgTAP compatibility
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -25,7 +30,7 @@ jobs:
       - name: Set up pinned tools
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
         with:
-          install_args: node bun task
+          install_args: node bun
           cache: true
 
       - name: Cache Bun package cache
@@ -39,23 +44,26 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Start Supabase
-        run: task db:start
-
-      - name: Reset database
-        run: bunx supabase db reset --local --yes
+      # Hosted runners have no prior database volume. Fresh db start applies
+      # migrations and seeds; scripts/database/smoke.mjs verifies this contract.
+      - name: Start Supabase database
+        run: bunx --no-install supabase db start
 
       - name: Lint database
-        run: bunx supabase db lint --local --fail-on warning
+        run: bunx --no-install supabase db lint --local --fail-on warning
 
       - name: Run pgTAP tests
         run: |
-          if find supabase/tests -type f -name "*.sql" 2>/dev/null | grep -q .; then
-            bunx supabase test db --local supabase/tests
+          if find supabase/tests -type f \( -name "*.sql" -o -name "*.pg" \) 2>/dev/null | grep -q .; then
+            bunx --no-install supabase test db --local supabase/tests
           else
             echo "No Supabase pgTAP tests found; skipping."
           fi
 
       - name: Stop Supabase
         if: always()
-        run: bunx supabase stop --no-backup || true
+        run: bunx --no-install supabase stop --no-backup || true
+
+      - name: Verify isolated database startup contract
+        if: success() && inputs.smoke == true
+        run: node scripts/database/smoke.mjs

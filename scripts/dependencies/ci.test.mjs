@@ -44,7 +44,7 @@ function fixture(t) {
         ...env,
       },
     });
-  const merge = () => {
+  const merge = (comparisonBase = baseSha) => {
     git("add", ".");
     git("commit", "--quiet", "-m", "PR change");
     const headSha = git("rev-parse", "HEAD");
@@ -54,16 +54,16 @@ function fixture(t) {
         "commit-tree",
         git("rev-parse", "HEAD^{tree}"),
         "-p",
-        baseSha,
+        comparisonBase,
         "-p",
         headSha,
       ],
       { cwd: directory, encoding: "utf8", input: "Synthetic merge\n" },
     ).trim();
     git("checkout", "--quiet", testedSha);
-    return { baseSha, headSha, testedSha };
+    return { baseSha: comparisonBase, headSha, testedSha };
   };
-  return { directory, manifest, merge, run };
+  return { directory, manifest, merge, run, git, baseSha };
 }
 
 for (const [path, database] of [
@@ -71,6 +71,12 @@ for (const [path, database] of [
   ["package.json", true],
   ["supabase/migrations/001.sql", true],
   [".github/workflows/database.yml", true],
+  ["supabase/seed.sql", true],
+  ["supabase/tests/policy.sql", true],
+  ["supabase/config.toml", true],
+  ["scripts/database/smoke.mjs", true],
+  ["scripts/dependencies/database-scope.mjs", true],
+  ["mise.lock", true],
 ]) {
   test(`scope selects applicable database checks for ${path}`, (t) => {
     const f = fixture(t);
@@ -185,3 +191,80 @@ test("aggregate rejects a missing or invalid database applicability result", (t)
     );
   }
 });
+
+for (const [description, mutate, expected] of [
+  [
+    "unrelated declaration",
+    (manifest, lock) => {
+      manifest.dependencies.clsx = "^2.1.1";
+      lock.workspaces[""].dependencies.clsx = "^2.1.1";
+    },
+    false,
+  ],
+  [
+    "unrelated transitive lockfile",
+    (_manifest, lock) => {
+      lock.packages.helper[0] = "helper@1.1.0";
+    },
+    false,
+  ],
+  [
+    "CLI transitive lockfile",
+    (_manifest, lock) => {
+      lock.packages.jose[0] = "jose@6.1.0";
+    },
+    true,
+  ],
+  [
+    "mixed relevant and unrelated updates",
+    (manifest, lock) => {
+      manifest.dependencies.clsx = "^2.1.1";
+      lock.packages.supabase[0] = "supabase@2.1.0";
+    },
+    true,
+  ],
+]) {
+  test(`hosted scope output for ${description}`, (t) => {
+    const f = fixture(t);
+    const manifest = {
+      dependencies: { clsx: "^2.1.0" },
+      devDependencies: { supabase: "^2.0.0" },
+    };
+    const lock = {
+      lockfileVersion: 1,
+      workspaces: { "": structuredClone(manifest) },
+      packages: {
+        clsx: ["clsx@2.1.0", "", { dependencies: { helper: "1.0.0" } }],
+        helper: ["helper@1.0.0", "", {}],
+        supabase: ["supabase@2.0.0", "", { dependencies: { jose: "6.0.0" } }],
+        jose: ["jose@6.0.0", "", {}],
+      },
+    };
+    const write = () => {
+      writeFileSync(
+        join(f.directory, "package.json"),
+        JSON.stringify(manifest),
+      );
+      writeFileSync(join(f.directory, "bun.lock"), JSON.stringify(lock));
+    };
+    write();
+    f.git("add", ".");
+    f.git("commit", "--quiet", "-m", "dependency baseline");
+    const before = f.git("rev-parse", "HEAD");
+    mutate(manifest, lock);
+    write();
+    const { headSha } = f.merge(before);
+    for (const event of [
+      { before },
+      { pull_request: { head: { sha: headSha } } },
+    ]) {
+      writeFileSync(join(f.directory, "output"), "");
+      const result = f.run("scope", { EVENT_JSON: JSON.stringify(event) });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(
+        readFileSync(join(f.directory, "output"), "utf8"),
+        `database=${expected}\n`,
+      );
+    }
+  });
+}
