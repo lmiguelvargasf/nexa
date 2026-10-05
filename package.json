@@ -84,7 +84,7 @@
     "postcss": "8.5.28",
     "protobufjs": "7.6.6",
     "qs": "6.16.0",
-    "ws": "8.21.0"
+    "ws": "8.21.3"
   },
   "ignoreScripts": [
     "sharp",
