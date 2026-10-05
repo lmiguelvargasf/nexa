@@ -139,6 +139,7 @@ tasks:
       - task: typecheck
       - task: test:run
       - task: skills:test
+      - task: dependencies:config
       - task: dependencies:test
       - task: agents:test
       - task: build
@@ -159,7 +160,7 @@ tasks:
       - mise exec -- node --test scripts/skills/*.test.mjs
 
   dependencies:test:
-    desc: Test dependency automation trust boundaries and failure paths with fixtures
+    desc: Test CI scope, required-check aggregation, and dependency audit failures
     cmds:
       - mise exec -- node --test scripts/dependencies/*.test.mjs
 

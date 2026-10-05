@@ -63,10 +63,10 @@ policy and templates. See [skill provenance and updates](docs/github-issues.md).
 
 ## Dependency Updates
 
-Renovate prepares weekly updates. Eligible minor/patch updates merge automatically
-after current CI, complete Sol PASS and the required merge policy check. Major
-updates and changes requiring human review stay manual. See
-[setup, spending controls, and pilot](docs/dependency-updates.md).
+Renovate groups routine updates into one weekly PR. GitHub merges it after the
+required CI and security checks pass. Major upgrades wait in the Dependency
+Dashboard until requested and stay manual to merge. See
+[setup and failed-update recovery](docs/dependency-updates.md).
 
 ## Project Skill Updates
 

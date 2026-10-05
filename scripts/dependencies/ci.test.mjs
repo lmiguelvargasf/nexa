@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -59,62 +66,66 @@ function fixture(t) {
   return { directory, manifest, merge, run };
 }
 
-for (const dependency of [false, true]) {
-  test(`scope reports exact PR applicability (${dependency ? "dependency" : "documentation"})`, (t) => {
+for (const [path, database] of [
+  ["README.md", false],
+  ["package.json", true],
+  ["supabase/migrations/001.sql", true],
+  [".github/workflows/database.yml", true],
+]) {
+  test(`scope selects applicable database checks for ${path}`, (t) => {
     const f = fixture(t);
-    writeFileSync(join(f.directory, "README.md"), "Updated documentation.\n");
-    if (dependency) {
-      f.manifest.dependencies.clsx = "^2.1.1";
-      writeFileSync(
-        join(f.directory, "package.json"),
-        JSON.stringify(f.manifest),
-      );
-    }
+    const target = join(f.directory, path);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, "Changed content.\n");
     const identity = f.merge();
     const result = f.run("scope", {
       EVENT_JSON: JSON.stringify({
         pull_request: { number: 7, head: { sha: identity.headSha } },
       }),
-      GITHUB_REPOSITORY: "owner/copied-template",
-      GITHUB_RUN_ID: "123",
     });
     assert.equal(result.status, 0, result.stderr);
-    const summary = readFileSync(join(f.directory, "summary"), "utf8");
-    assert.ok(
-      summary.includes(`**${dependency ? "applies" : "not applicable"}**`),
-    );
-    for (const sha of Object.values(identity)) assert.ok(summary.includes(sha));
-    assert.match(summary, /diagnostic only/);
     assert.equal(
       readFileSync(join(f.directory, "output"), "utf8"),
-      `database=${dependency}\n`,
+      `database=${database}\n`,
     );
-    assert.deepEqual(
-      JSON.parse(readFileSync(join(f.directory, "validation-identity.json"))),
-      {
-        repository: "owner/copied-template",
-        prNumber: 7,
-        ...identity,
-        runId: 123,
-      },
+    assert.equal(
+      existsSync(join(f.directory, "validation-identity.json")),
+      false,
     );
   });
 }
-
-test("scope fails closed and explains unreadable applicability evidence", (t) => {
+test("scope rejects an unmerged or mismatched PR head", (t) => {
   const f = fixture(t);
-  writeFileSync(join(f.directory, "package.json"), "{malformed");
-  const identity = f.merge();
-  const result = f.run("scope", {
-    EVENT_JSON: JSON.stringify({
-      pull_request: { number: 7, head: { sha: identity.headSha } },
-    }),
-  });
-  assert.notEqual(result.status, 0);
-  const summary = readFileSync(join(f.directory, "summary"), "utf8");
-  assert.match(summary, /validation fails closed/);
-  assert.ok(summary.includes(identity.headSha));
-  assert.ok(summary.includes(identity.baseSha));
+  const event = { pull_request: { number: 7, head: { sha: "a".repeat(40) } } };
+  assert.notEqual(
+    f.run("scope", { EVENT_JSON: JSON.stringify(event) }).status,
+    0,
+  );
+  writeFileSync(join(f.directory, "README.md"), "PR change.\n");
+  f.merge();
+  assert.notEqual(
+    f.run("scope", { EVENT_JSON: JSON.stringify(event) }).status,
+    0,
+  );
+});
+
+test("push checks use changed paths and manual runs conservatively check the database", (t) => {
+  const f = fixture(t);
+  writeFileSync(join(f.directory, "README.md"), "PR change.\n");
+  const { baseSha } = f.merge();
+  assert.equal(
+    f.run("scope", { EVENT_JSON: JSON.stringify({ before: baseSha }) }).status,
+    0,
+  );
+  assert.equal(
+    readFileSync(join(f.directory, "output"), "utf8"),
+    "database=false\n",
+  );
+  assert.equal(f.run("scope", { EVENT_JSON: "{}" }).status, 0);
+  assert.equal(
+    readFileSync(join(f.directory, "output"), "utf8"),
+    "database=false\ndatabase=true\n",
+  );
 });
 
 test("CI aggregate permits only successful required checks and an inapplicable database skip", (t) => {
@@ -158,24 +169,19 @@ test("CI aggregate permits only successful required checks and an inapplicable d
   }
 });
 
-test("legacy required-check alias always evaluates and fails unless CI validation succeeds", () => {
-  const workflow = readFileSync(
-    new URL("../../.github/workflows/ci.yml", import.meta.url),
-    "utf8",
-  );
-  assert.match(workflow, /aggregate:\n {4}name: CI validation\n/);
-  const legacy = workflow.slice(workflow.indexOf("  legacy-aggregate:\n"));
-  assert.match(legacy, /name: Dependency validation\n/);
-  assert.match(legacy, /needs: aggregate\n {4}if: always\(\)\n/);
-  assert.match(
-    legacy,
-    /AGGREGATE_RESULT: \$\{\{ needs\.aggregate\.result \}\}/,
-  );
-  const command = legacy.match(/ {8}run: (.+)\n/)[1];
-  for (const result of ["success", "failure", "cancelled", "skipped", ""]) {
-    const run = spawnSync("sh", ["-c", command], {
-      env: { ...process.env, AGGREGATE_RESULT: result },
-    });
-    assert.equal(run.status === 0, result === "success", result);
+test("aggregate rejects a missing or invalid database applicability result", (t) => {
+  const f = fixture(t);
+  for (const value of ["", "TRUE", "unknown"]) {
+    assert.notEqual(
+      f.run("aggregate", {
+        DATABASE_REQUIRED: value,
+        RESULTS_JSON: JSON.stringify({
+          scope: { result: "success" },
+          verify: { result: "success" },
+          database: { result: "skipped" },
+        }),
+      }).status,
+      0,
+    );
   }
 });
