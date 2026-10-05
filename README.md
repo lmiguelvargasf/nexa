@@ -50,7 +50,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Database Schema
 
-Supabase SQL migrations are the source of truth for schema changes. After changing migrations, regenerate TypeScript database types with `task db:types`.
+Supabase SQL migrations are the source of truth for schema changes. After changing migrations, regenerate TypeScript database types with `task db:types`. See [database CI scope and validation](docs/database-validation.md) for the database-only check and isolated startup smoke test.
 
 ## Common Tasks
 

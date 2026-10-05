@@ -197,6 +197,11 @@ tasks:
       - "{{.BUN_RUN}} db:start {{.CLI_ARGS}}"
       - mise exec -- ./scripts/sync-supabase-env.sh
 
+  db:smoke:
+    desc: Verify fresh database-only startup, migrations, seeds, lint, and pgTAP in an isolated project
+    cmds:
+      - mise exec -- node scripts/database/smoke.mjs
+
   db:stop:
     desc: Stop the local Supabase stack
     cmds:
