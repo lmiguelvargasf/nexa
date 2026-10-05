@@ -31,19 +31,11 @@ jobs:
       - uses: jdx/mise-action@v4
         with:
           install_args: node
-      - name: Determine applicable checks and tested revision
+      - name: Determine applicable database checks
         id: scope
         run: node scripts/dependencies/ci.mjs scope
         env:
           EVENT_JSON: ${{ toJSON(github.event) }}
-      - name: Preserve the tested PR identity
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v7
-        with:
-          name: validation-identity
-          path: validation-identity.json
-          retention-days: 7
-          if-no-files-found: error
 
   verify:
     name: Pre-PR validation
@@ -110,16 +102,3 @@ jobs:
         env:
           RESULTS_JSON: ${{ toJSON(needs) }}
           DATABASE_REQUIRED: ${{ needs.scope.outputs.database }}
-
-  legacy-aggregate:
-    # Keep the old required-check name until the ruleset migration is verified.
-    name: Dependency validation
-    needs: aggregate
-    if: always()
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Require the CI aggregate to succeed
-        run: test "$AGGREGATE_RESULT" = success
-        env:
-          AGGREGATE_RESULT: ${{ needs.aggregate.result }}

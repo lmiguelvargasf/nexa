@@ -1,7 +1,16 @@
 import { spawnSync } from "node:child_process";
 import { appendFileSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { parseLock } from "./policy.mjs";
+
+// Bun's lockfile is JSON with trailing commas. Parse data without executing it.
+export function parseLock(text) {
+  return JSON.parse(
+    text.replace(
+      /("(?:\\.|[^"\\])*")|,\s*(?=[}\]])/g,
+      (_match, string) => string ?? "",
+    ),
+  );
+}
 
 export function evaluateAudit(advisories, lock, exceptions, now = Date.now()) {
   if (

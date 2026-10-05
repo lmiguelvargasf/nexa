@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
-import { evaluateAudit } from "./audit.mjs";
+import { evaluateAudit, parseLock } from "./audit.mjs";
 
 const exception = {
   package: "braces",
@@ -70,4 +71,17 @@ test("expired exceptions and unavailable or malformed audit data fail closed", (
     accepted: [],
     blocked: [],
   });
+});
+
+test("lockfile parsing accepts trailing commas without evaluating code or altering quoted data", () => {
+  assert.deepEqual(parseLock('{"quoted": ",}", "packages": {},}'), {
+    quoted: ",}",
+    packages: {},
+  });
+  assert.throws(() => parseLock('{"code": (() => process.exit())()}'));
+  assert.throws(() => parseLock('{/* comment */ "a": 1}'));
+  assert.ok(
+    parseLock(readFileSync(new URL("../../bun.lock", import.meta.url), "utf8"))
+      .packages,
+  );
 });

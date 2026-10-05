@@ -5,69 +5,39 @@
   "timezone": "America/Guayaquil",
   "schedule": ["before 10am on wednesday"],
   "prConcurrentLimit": 3,
-  "prHourlyLimit": 0,
   "minimumReleaseAge": "3 days",
   "minimumReleaseAgeBehaviour": "timestamp-required",
   "internalChecksFilter": "strict",
   "rangeStrategy": "bump",
-  "separateMinorPatch": true,
-  "rebaseWhen": "behind-base-branch",
+  "separateMinorPatch": false,
   "automerge": false,
+  "automergeType": "pr",
   "platformAutomerge": true,
   "dependencyDashboard": true,
+  "major": {
+    "dependencyDashboardApproval": true
+  },
   "lockFileMaintenance": {
-    "enabled": true
+    "enabled": false
   },
   "vulnerabilityAlerts": {
     "enabled": true,
+    "dependencyDashboardApproval": false,
     "minimumReleaseAge": "0 days",
-    "schedule": ["at any time"]
+    "schedule": ["at any time"],
+    "groupName": null,
+    "prConcurrentLimit": 1
   },
   "packageRules": [
     {
-      "matchUpdateTypes": ["patch", "minor"],
+      "matchUpdateTypes": ["patch", "minor", "pin", "pinDigest", "digest"],
+      "groupName": "Weekly dependencies",
       "automerge": true,
-      "automergeType": "pr",
-      "description": "Automatically merge any minor/patch update after current CI and trusted Sol PASS"
-    },
-    {
-      "matchDepNames": [
-        "next",
-        "react",
-        "react-dom",
-        "@types/react",
-        "@types/react-dom"
-      ],
-      "matchUpdateTypes": ["patch", "minor"],
-      "groupName": "Next.js and React"
-    },
-    {
-      "matchDepNames": ["ai", "@ai-sdk/*"],
-      "matchUpdateTypes": ["patch", "minor"],
-      "groupName": "AI SDK"
-    },
-    {
-      "matchDepNames": ["@react-email/*", "react-email"],
-      "matchUpdateTypes": ["patch", "minor"],
-      "groupName": "React Email"
-    },
-    {
-      "matchDepNames": ["node", "@types/node"],
-      "groupName": "Node.js toolchain"
-    },
-    {
-      "matchDepNames": ["bun", "oven-sh/bun"],
-      "groupName": "Bun toolchain"
+      "description": "One routine batch; native auto-merge waits for required CI."
     },
     {
       "matchManagers": ["github-actions"],
       "pinDigests": true
-    },
-    {
-      "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["pin", "pinDigest", "digest"],
-      "automerge": true,
-      "automergeType": "pr"
     }
   ]
 }

@@ -104,8 +104,8 @@ login is `brikosi[bot]`.
 Briko publishes coding-agent implementation branches and PRs through the owner's
 **Brikosi** GitHub App (`brikosi[bot]`). The maintainer
 reviews those PRs using their own GitHub account. App authorship is provenance;
-required CI, current-revision checks, dependency attestations and merge protections
-still apply. Briko does not review, approve or automatically merge changes.
+required CI, current-revision checks and merge protections still apply. Briko does
+not review, approve or automatically merge changes.
 Existing human-authored PRs keep their authors; switching credentials cannot
 transfer historical authorship. Commit authors and coauthor disclosures are
 preserved independently of the PR author.
