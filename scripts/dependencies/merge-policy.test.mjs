@@ -164,6 +164,7 @@ function fixture(
     id: 222,
     path: ".github/workflows/dependency-review.yml",
     event: "workflow_run",
+    display_title: "Dependency review CI 123 PR 7",
     status: "completed",
     conclusion: "success",
   };
@@ -195,6 +196,7 @@ function fixture(
     },
   };
   const env = {
+    GITHUB_ACTIONS: "false",
     GITHUB_REPOSITORY: repository,
     GITHUB_EVENT_PATH: join(directory, "event.json"),
     GITHUB_EVENT_NAME: "workflow_dispatch",
@@ -227,6 +229,8 @@ function fixture(
         path: ".github/workflows/ci.yml",
         event: "pull_request",
         head_sha: head,
+        head_branch: "renovate/clsx",
+        pull_requests: [{ number: 7 }],
         head_repository: { full_name: repository },
         status: "completed",
         conclusion: "success",
@@ -262,7 +266,14 @@ async function withFixture(t, automatic, callback, mutate, options) {
     let value;
     if (path === "") value = { default_branch: "main" };
     else if (path === "/branches/main")
-      value = { commit: { sha: f.identity.baseSha } };
+      value = {
+        commit: {
+          sha:
+            f.baseRace && f.headReads > (f.raceAfter ?? 1)
+              ? "d".repeat(40)
+              : f.identity.baseSha,
+        },
+      };
     else if (/^\/pulls\/\d+$/.test(path)) {
       f.headReads++;
       const pr = (f.prs ?? [f.pr]).find(
@@ -270,18 +281,53 @@ async function withFixture(t, automatic, callback, mutate, options) {
       );
       assert.ok(pr, `Unexpected PR ${path}`);
       value =
-        f.race && f.headReads > 1
+        f.race && f.headReads > (f.raceAfter ?? 1)
           ? { ...pr, head: { ...pr.head, sha: "e".repeat(40) } }
           : pr;
     } else if (path.startsWith("/commits/") && f.commits[path.slice(9)])
       value = f.commits[path.slice(9)];
     else if (path === "/pulls") value = f.prs ?? [f.pr];
-    else if (path === "/actions/workflows/ci.yml/runs")
-      value = { workflow_runs: f.ciRuns };
-    else if (path === "/actions/workflows/dependency-merge-policy.yml/runs")
+    else if (path === "/actions/workflows/ci.yml/runs") {
+      f.ciReads = (f.ciReads ?? 0) + 1;
+      value = {
+        workflow_runs:
+          f.ciRace && f.ciReads > 1
+            ? [
+                {
+                  ...f.ciRuns[0],
+                  id: 124,
+                  status: "in_progress",
+                  conclusion: null,
+                },
+              ]
+            : f.ciRuns,
+      };
+    } else if (path === "/actions/workflows/dependency-merge-policy.yml/runs")
       value = { workflow_runs: f.approvals };
-    else if (path === "/actions/workflows/dependency-review.yml/runs")
-      value = { workflow_runs: f.reviewRuns ?? [f.reviewRun] };
+    else if (path === "/actions/workflows/dependency-review.yml/runs") {
+      f.reviewReads = (f.reviewReads ?? 0) + 1;
+      value = {
+        workflow_runs:
+          f.reviewRace && f.reviewReads > 2
+            ? [
+                {
+                  ...f.reviewRun,
+                  id: 223,
+                  status: "in_progress",
+                  conclusion: null,
+                },
+                f.reviewRun,
+              ]
+            : (f.reviewRuns ?? [f.reviewRun]),
+      };
+    } else if (path === "/actions/runs/333/jobs")
+      value = {
+        jobs: f.skippedJobs ?? [
+          { name: "prepare", status: "completed", conclusion: "skipped" },
+        ],
+      };
+    else if (path === "/actions/runs/123")
+      value = f.ciRuns.find((run) => run.id === 123);
     else if (path === "/actions/runs/123/jobs") value = { jobs: f.jobs };
     else if (path === "/actions/runs/456") value = f.execution;
     else if (path.endsWith("/permission")) value = { permission: f.permission };
@@ -300,7 +346,7 @@ async function withFixture(t, automatic, callback, mutate, options) {
       return archive("validation-identity.json", f.identity);
     else if (path === "/actions/runs/222/artifacts")
       value = {
-        artifacts: [
+        artifacts: f.reviewArtifacts ?? [
           {
             id: 92,
             name: "dependency-review-input",
@@ -316,12 +362,21 @@ async function withFixture(t, automatic, callback, mutate, options) {
         ],
       };
     else if (path === "/actions/artifacts/92/zip")
-      return archive("report.json", {
-        identity: f.identity,
-        status: "PENDING",
-      });
+      return f.corruptInput
+        ? new Response("invalid zip")
+        : archive(
+            "report.json",
+            f.input ?? {
+              runId: 222,
+              key: f.key,
+              identity: f.identity,
+              status: "PENDING",
+            },
+          );
     else if (path === "/actions/artifacts/93/zip")
-      return archive("report.json", f.report);
+      return f.corruptResult
+        ? new Response("invalid zip")
+        : archive("report.json", f.report);
     else if (path === "/actions/runs/444/artifacts")
       value = {
         artifacts: [
@@ -344,6 +399,8 @@ async function withFixture(t, automatic, callback, mutate, options) {
   process.chdir(f.directory);
   const run = async () => {
     f.headReads = 0;
+    f.ciReads = 0;
+    f.reviewReads = 0;
     writeFileSync(f.env.GITHUB_EVENT_PATH, JSON.stringify(f.event));
     f.decisions = await gate(join(f.directory, "approval"), f.env);
     return f.statuses.at(-1);
@@ -642,7 +699,10 @@ test("untrusted workflow provenance and a new failed review cannot reuse an olde
       const old = f.reviewRun;
       f.reviewRun = { ...old, ...change };
       f.reviewRuns = [f.reviewRun, { ...old, id: 221 }];
-      assert.equal((await run()).state, "failure");
+      assert.equal(
+        (await run()).state,
+        change.status === "in_progress" ? "pending" : "failure",
+      );
       f.reviewRun = old;
       f.reviewRuns = undefined;
     }
@@ -685,20 +745,12 @@ test("transitive changes can qualify with current complete trusted AI PASS", asy
     },
   ));
 
-test("changed revisions and publication races never authorize approval", async (t) =>
+test("changed revisions and publication races never publish obsolete decisions", async (t) =>
   withFixture(t, true, async (f, run) => {
-    for (const key of ["head", "base"]) {
-      const sha = f.pr[key].sha;
-      f.pr[key].sha = "f".repeat(40);
-      assert.equal((await run()).state, "failure");
-      f.pr[key].sha = sha;
-    }
-    f.pr.merge_commit_sha = "f".repeat(40);
-    assert.equal((await run()).state, "failure");
-    f.pr.merge_commit_sha = f.identity.testedSha;
     f.race = true;
-    assert.equal((await run()).state, "failure");
-    assert.match(f.statuses.at(-1).description, /changed during evaluation/);
+    await run();
+    assert.equal(f.decisions[0].state, "obsolete");
+    assert.equal(f.statuses.length, 0);
   }));
 
 test("human approval preserves CI, verifies actor permissions and binds exact revisions", async (t) =>
@@ -927,9 +979,9 @@ test("ordinary PR publication still rejects revision races", async (t) =>
     false,
     async (f, run) => {
       f.race = true;
-      const result = await run();
-      assert.equal(result.state, "failure");
-      assert.match(result.description, /changed during evaluation/);
+      await run();
+      assert.equal(f.decisions[0].state, "obsolete");
+      assert.equal(f.statuses.length, 0);
     },
     () => {},
     { manager: "none" },
@@ -1129,3 +1181,209 @@ test("conservative YAML applicability preserves explicit human completion", asyn
     },
     { manager: "none" },
   ));
+
+test("unrelated artifact-less skipped and failed reviews cannot poison a matching PASS", async (t) =>
+  withFixture(t, true, async (f, run) => {
+    const legacy = {
+      ...f.reviewRun,
+      id: 333,
+      display_title: "Dependency review",
+      conclusion: "skipped",
+    };
+    const unrelated = {
+      ...f.reviewRun,
+      id: 334,
+      event: "workflow_dispatch",
+      display_title: "Dependency review PR 8",
+      conclusion: "failure",
+    };
+    f.reviewRuns = [unrelated, legacy, f.reviewRun];
+    assert.equal((await run()).state, "success");
+    assert.ok(
+      !f.requests.some(({ path }) => /runs\/(333|334)\/artifacts/.test(path)),
+    );
+  }));
+
+test("missing, expired, ambiguous and corrupt matching input evidence block older PASS", async (t) =>
+  withFixture(t, true, async (f, run) => {
+    f.reviewRuns = [f.reviewRun, { ...f.reviewRun, id: 221 }];
+    const valid = [
+      {
+        id: 92,
+        name: "dependency-review-input",
+        size_in_bytes: 1000,
+        expired: false,
+      },
+      {
+        id: 93,
+        name: "dependency-review-result",
+        size_in_bytes: 1000,
+        expired: false,
+      },
+    ];
+    for (const artifacts of [
+      [],
+      [{ ...valid[0], expired: true }],
+      [valid[0], { ...valid[0], id: 94 }],
+      [{ ...valid[0], size_in_bytes: 65537 }],
+      [valid[0]],
+      [valid[0], { ...valid[1], expired: true }],
+      [valid[0], valid[1], { ...valid[1], id: 95 }],
+    ]) {
+      f.reviewArtifacts = artifacts;
+      assert.equal((await run()).state, "failure");
+      assert.ok(
+        !f.requests.some(({ path }) => path === "/actions/runs/221/artifacts"),
+      );
+    }
+    f.reviewArtifacts = valid;
+    f.corruptInput = true;
+    assert.equal((await run()).state, "failure");
+    f.corruptInput = false;
+    f.corruptResult = true;
+    assert.equal((await run()).state, "failure");
+    f.corruptResult = false;
+    f.input = {
+      runId: 222,
+      key: f.key,
+      identity: { ...f.identity, testedSha: "bad" },
+      status: "PENDING",
+    };
+    assert.equal((await run()).state, "failure");
+  }));
+
+test("matching active review transitions to PASS or completed failure without fallback", async (t) =>
+  withFixture(t, true, async (f, run) => {
+    const original = structuredClone(f.reviewRun);
+    f.reviewRuns = [f.reviewRun, { ...original, id: 221 }];
+    for (const status of ["requested", "queued", "waiting", "in_progress"]) {
+      f.reviewRun.status = status;
+      f.reviewRun.conclusion = null;
+      assert.equal((await run()).state, "pending");
+    }
+    f.reviewRun.status = "completed";
+    f.reviewRun.conclusion = "failure";
+    assert.equal((await run()).state, "failure");
+    f.reviewRun.conclusion = "success";
+    assert.equal((await run()).state, "success");
+    for (const status of ["DISABLED", "NEEDS_HUMAN", "ERROR", "BLOCK"]) {
+      f.input = {
+        runId: 222,
+        key: f.key,
+        identity: f.identity,
+        status,
+        reason: "Fix bounded evidence/setup then rerun",
+      };
+      const result = await run();
+      assert.equal(result.state, "failure");
+      assert.match(result.description, new RegExp(status));
+    }
+  }));
+
+test("rerun attempt cannot reuse previous-attempt artifacts", async (t) =>
+  withFixture(t, true, async (f, run) => {
+    f.reviewRun.run_attempt = 2;
+    assert.equal((await run()).state, "failure");
+    f.input = {
+      runId: 222,
+      runAttempt: 2,
+      key: f.key,
+      identity: f.identity,
+      status: "PENDING",
+    };
+    assert.equal((await run()).state, "failure");
+    f.report.runAttempt = 2;
+    assert.equal((await run()).state, "success");
+  }));
+
+test("old revision and old policy evidence never supplies a current PASS", async (t) =>
+  withFixture(t, true, async (f, run) => {
+    f.input = {
+      runId: 222,
+      key: f.key,
+      identity: { ...f.identity, headSha: "f".repeat(40) },
+      status: "PENDING",
+    };
+    assert.equal((await run()).state, "failure");
+    f.input.identity = f.identity;
+    f.input.key = "old-policy";
+    assert.equal((await run()).state, "failure");
+    assert.match(f.statuses.at(-1).description, /policy changed/);
+  }));
+
+test("base/head races before final publication cannot overwrite a newer decision", async (t) => {
+  for (const state of ["success", "failure", "pending"]) {
+    for (const baseRace of [false, true]) {
+      await withFixture(t, true, async (f, run) => {
+        f.raceAfter = state === "success" ? 4 : 3;
+        f.baseRace = baseRace;
+        f.race = !baseRace;
+        if (state === "failure") f.ciRuns[0].conclusion = "failure";
+        if (state === "pending") f.ciRuns[0].status = "in_progress";
+        await run();
+        assert.equal(f.decisions[0].state, "obsolete");
+        assert.deepEqual(
+          f.statuses.map(({ state }) => state),
+          ["pending", "pending"],
+        );
+      });
+    }
+  }
+});
+
+test("freshness is checked between head and merge status writes", async (t) =>
+  withFixture(t, true, async (f, run) => {
+    f.race = true;
+    f.raceAfter = 2;
+    await run();
+    assert.equal(f.decisions[0].state, "obsolete");
+    assert.deepEqual(
+      f.statuses.map(({ state }) => state),
+      ["pending"],
+    );
+  }));
+
+test("CI and review reruns supersede decisions even when head/base remain unchanged", async (t) => {
+  for (const initial of ["success", "failure", "pending"]) {
+    await withFixture(t, true, async (f, run) => {
+      if (initial === "failure") f.ciRuns[0].conclusion = "failure";
+      if (initial === "pending") f.ciRuns[0].status = "queued";
+      f.ciRace = true;
+      await run();
+      assert.equal(f.decisions[0].state, "obsolete");
+      assert.deepEqual(
+        f.statuses.map(({ state }) => state),
+        ["pending", "pending"],
+      );
+    });
+  }
+  await withFixture(t, true, async (f, run) => {
+    f.reviewRace = true;
+    await run();
+    assert.equal(f.decisions[0].state, "obsolete");
+    assert.deepEqual(
+      f.statuses.map(({ state }) => state),
+      ["pending", "pending"],
+    );
+  });
+});
+
+test("read-only matrix planning resolves targets without publishing or loading approval evidence", async (t) =>
+  withFixture(t, true, async (f, run) => {
+    f.env.PLAN_ONLY = "true";
+    f.env.GITHUB_OUTPUT = join(f.directory, "targets.txt");
+    await run();
+    assert.equal(readFileSync(f.env.GITHUB_OUTPUT, "utf8"), "prs=[7]\n");
+    assert.deepEqual(f.statuses, []);
+    assert.deepEqual(f.decisions, []);
+    assert.ok(!f.requests.some(({ path }) => path.includes("artifacts")));
+  }));
+
+test("queued legacy Actions workflow cannot publish outside the new per-PR lock", async (t) =>
+  withFixture(t, true, async (f, run) => {
+    f.env.GITHUB_ACTIONS = "true";
+    await assert.rejects(run(), /lacks the per-PR publication lock/);
+    assert.deepEqual(f.statuses, []);
+    f.env.TARGET_PR = "7";
+    assert.equal((await run()).state, "success");
+  }));

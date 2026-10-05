@@ -190,6 +190,7 @@ export async function prepare(directory, env = process.env) {
     identity,
     policy,
     runId: Number(env.GITHUB_RUN_ID),
+    runAttempt: Number(env.GITHUB_RUN_ATTEMPT ?? 1),
     ciRunId: runId,
     status: "NEEDS_HUMAN",
     complete: false,
