@@ -40,7 +40,7 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: true
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5
         with:
           install_args: node
       - name: Verify CI identity and prepare bounded evidence
@@ -75,7 +75,7 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.policy_sha }}
           persist-credentials: false
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5
         with:
           install_args: node
       - uses: actions/download-artifact@v8
@@ -135,7 +135,7 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.policy_sha }}
           persist-credentials: false
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5
         with:
           install_args: node
       - uses: actions/download-artifact@v8
