@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.127",
-    "@ai-sdk/openai": "^3.0.124",
+    "@ai-sdk/openai": "^4.0.83",
     "@hookform/resolvers": "^5.4.0",
     "@sentry/nextjs": "^10.76.0",
     "@stripe/react-stripe-js": "^6.4.0",
