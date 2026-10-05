@@ -77,7 +77,7 @@
   },
   "overrides": {
     "brace-expansion": "5.0.12",
-    "fast-uri": "3.1.8",
+    "fast-uri": "4.2.1",
     "hono": "4.13.12",
     "ip-address": "10.7.3",
     "next": "16.3.8",
