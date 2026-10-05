@@ -28,7 +28,7 @@
     "email:dev": "email dev --dir emails"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.127",
+    "@ai-sdk/anthropic": "^4.0.71",
     "@ai-sdk/openai": "^3.0.124",
     "@hookform/resolvers": "^5.4.0",
     "@sentry/nextjs": "^10.76.0",
